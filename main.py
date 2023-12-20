@@ -1,5 +1,5 @@
 from game import Game
-from project.min_max import MinMaxPlayer, AlphaBetaMinMaxPlayer
+from min_max import MinMaxPlayer, AlphaBetaMinMaxPlayer
 from random_player import RandomPlayer
 from human_player import HumanPlayer
 
