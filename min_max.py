@@ -15,18 +15,71 @@ class MinMaxPlayer(Player):
         is used by the Min-Man players to construct the search tree.
         """
 
-        def __init__(self, game: 'Game') -> None:
+        def __init__(self, game: 'Game', symmetries=False) -> None:
             """
             Constructor for creating a copy of the game to investigate.
 
             Args:
-                game: the current game state.
+                game: the current game state;
+                symmetries: flag to consider the symmetries or not.
 
             Returns:
                 None.
             """
             super().__init__()
             self._board = game.get_board()
+            self._rotations = [lambda x: np.rot90(x, k=1), lambda x: np.rot90(x, k=2), lambda x: np.rot90(x, k=3)]
+            self._flips = [lambda x: np.fliplr(x), lambda x: np.flipud(x)]
+            self._symmetries = symmetries
+
+        def __eq__(self, other) -> bool:
+            '''Equality check for the class. Are equal if the boards are equal.'''
+            return (self._board == other._board).all()
+
+        def _get_transformed_states(self) -> list['InvestigateGame']:
+            '''
+            Apply all possible transformations to the state and return a list of possible transformed states.
+            To compute all equivalent states, apply a 90°, 180°, and 270° rotation.
+            A horizontal and vertical flip, and a 90° rotation on the two flipped states.
+            Because a 180° rotation of the flipped states is equivalent to a flip in the original position,
+            and a 270° rotation of the flipped states is equivalent to flipping the 90° rotation.
+            (270° rotation of horizontal/vertical flip = 90° rotation of vertical/horizontal flip) and
+            (horizontal/vertical flip = 180° rotation of vertical/horizontal flip)
+            '''
+
+            # init list of transformed states
+            transformed_states = []
+
+            # adding flipped and flipped + rotate90
+            for flip in self._flips:
+                # copy of the state
+                state = deepcopy(self)
+                # transform the board
+                flipped_board = flip(state._board)
+                # new flipped state
+                state._board = flipped_board
+                # append transformed state
+                transformed_states.append(state)
+                # new state flipped and rotate
+                state._board = np.rot90(flipped_board)
+                # append new transformed state
+                transformed_states.append(state)
+
+            # adding rotated
+            for rotate in self._rotations:
+                # copy of the state
+                state = deepcopy(self)
+                # transform the board
+                state._board = rotate(state._board)
+                # append transformed state
+                transformed_states.append(state)
+
+            # if canonic state is in transformed states
+            if self in transformed_states:
+                # remove the canonic state
+                transformed_states.remove(self)
+
+            return transformed_states
 
         def generate_possible_transitions(self, player_id: int) -> list[tuple[tuple[int, int], Move]]:
             """
@@ -60,13 +113,45 @@ class MinMaxPlayer(Player):
 
             return transitions
 
-    def __init__(self, player_id: int, depth: int = 3) -> None:
+        def generate_canonical_transitions(self, player_id: int) -> list[tuple[tuple[int, int], Move]]:
+            """
+            Generate all possible game transitions that a given player can make considering the canonic states.
+
+            Args:
+                player_id: the player's id.
+
+            Returns:
+                A list of pairs of actions and corresponding game states
+                is returned.
+            """
+
+            # get possible transictions
+            transictions = self.generate_possible_transitions(player_id)
+            # get the states
+            _, states = zip(*transictions)
+            # convert to list
+            states = list(states)
+
+            i = 0
+            # for each transiction
+            while i < len(states):
+                # compute all the transformed states
+                transformed_states = states[i]._get_transformed_states()
+                # delete transformed states
+                states = [state for state in states if state not in transformed_states]
+                # increment index
+                i += 1
+
+            return [transiction for transiction in transictions if transiction[1] in states]
+
+    def __init__(self, player_id: int, depth: int = 3, symmetries: bool = False) -> None:
         """
         Constructor of the Min-Max player.
 
         Args:
             player_id: the player's id;
-            depth: maximum depth of the Min-Max search tree.
+            depth: maximum depth of the Min-Max search tree;
+            symmetries: flag to consider the symmetries or not.
 
         Returns:
             None.
@@ -75,6 +160,7 @@ class MinMaxPlayer(Player):
         self._player_id: int = player_id
         self._opponent_player_id = abs(1 - self._player_id)
         self._depth = depth
+        self._symmetries = symmetries
 
     def evaluation_function(self, game: 'InvestigateGame') -> int | float:
         """
@@ -173,8 +259,14 @@ class MinMaxPlayer(Player):
             return self.evaluation_function(game)
         # set the current best max value
         value = float('-inf')
-        # for all possible game transitions
-        for _, state in game.generate_possible_transitions(self._player_id):
+        # get all possible game transictions or canonical transictions
+        transictions = (
+            game.generate_canonical_transitions(self._player_id)
+            if self._symmetries
+            else game.generate_possible_transitions(self._player_id)
+        )
+        # for each possible game transictions
+        for _, state in transictions:
             # update the current max value
             value = max(value, self.min_value(state, depth - 1))
         return value
@@ -199,8 +291,14 @@ class MinMaxPlayer(Player):
             return self.evaluation_function(game)
         # set the current best min value
         value = float('inf')
-        # for all possible game transitions
-        for _, state in game.generate_possible_transitions(self._opponent_player_id):
+        # get all possible game transictions or canonical transictions
+        transictions = (
+            game.generate_canonical_transitions(self._opponent_player_id)
+            if self._symmetries
+            else game.generate_possible_transitions(self._opponent_player_id)
+        )
+        # for each possible game transictions
+        for _, state in transictions:
             # update the current min value
             value = min(value, self.max_value(state, depth - 1))
         return value
@@ -216,9 +314,15 @@ class MinMaxPlayer(Player):
             The best move to play for Max is returned.
         """
         # create seperate instance of a game for investigation
-        game = self.InvestigateGame(game)
+        game = self.InvestigateGame(game, self._symmetries)
+        # get all possible game transictions or canonical transictions
+        transictions = (
+            game.generate_canonical_transitions(self._opponent_player_id)
+            if self._symmetries
+            else game.generate_possible_transitions(self._opponent_player_id)
+        )
         # for all possible actions and result states
-        actions, states = zip(*game.generate_possible_transitions(self._player_id))
+        actions, states = zip(*transictions)
         # return the action corresponding to the best estimated move
         tuple_ = max(enumerate(actions), key=lambda t: self.min_value(states[t[0]], self._depth - 1))
         # extract the action
@@ -233,18 +337,19 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
     Min-Max algorithm improved by the alpha-beta pruning technique.
     """
 
-    def __init__(self, player_id: int, depth: int = 3) -> None:
+    def __init__(self, player_id: int, depth: int = 3, symmetries: bool = False) -> None:
         """
         Constructor of the Min-Max + Alpha-Beta pruning player.
 
         Args:
             player_id: the player's id;
-            depth: maximum depth of the Min-Max search tree.
+            depth: maximum depth of the Min-Max search tree;
+            symmetries: flag to consider the symmetries or not.
 
         Returns:
             None.
         """
-        super().__init__(player_id, depth)
+        super().__init__(player_id, depth, symmetries)
 
     def max_value(
         self, game: 'Game', depth: int, alpha: float, beta: float
@@ -273,8 +378,14 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         best_value = float('-inf')
         # set the current best move
         best_action = None
-        # for all possible game transitions
-        for action, state in game.generate_possible_transitions(self._player_id):
+        # get all possible game transictions or canonical transictions
+        transictions = (
+            game.generate_canonical_transitions(self._player_id)
+            if self._symmetries
+            else game.generate_possible_transitions(self._player_id)
+        )
+        # for each possible game transictions
+        for action, state in transictions:
             # play as Min
             value, _ = self.min_value(state, depth - 1, alpha, beta)
             # if we find a better value
@@ -318,8 +429,14 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         best_value = float('inf')
         # set the current best move
         best_action = None
-        # for all possible game transitions
-        for action, state in game.generate_possible_transitions(self._opponent_player_id):
+        # get all possible game transictions or canonical transictions
+        transictions = (
+            game.generate_canonical_transitions(self._opponent_player_id)
+            if self._symmetries
+            else game.generate_possible_transitions(self._opponent_player_id)
+        )
+        # for each possible game transictions
+        for action, state in transictions:
             # play as Max
             value, _ = self.max_value(state, depth - 1, alpha, beta)
             # if we find a better value
@@ -347,7 +464,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             The best move to play for Max is returned.
         """
         # create seperate instance of a game for investigation
-        game = self.InvestigateGame(game)
+        game = self.InvestigateGame(game, self._symmetries)
         # get the best move to play
         _, action = self.max_value(game, self._depth, float('-inf'), float('inf'))
         # return it
