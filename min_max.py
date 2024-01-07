@@ -1,8 +1,6 @@
 import numpy as np
 import time
 from game import Game, Move, Player
-from copy import deepcopy
-from itertools import product
 from investigate_game import InvestigateGame
 
 
@@ -128,9 +126,7 @@ class MinMaxPlayer(Player):
         value = float('-inf')
         # get all possible game transitions or canonical transitions
         transitions = (
-            game.generate_canonical_transitions(self._player_id)
-            if self._symmetries
-            else game.generate_possible_transitions(self._player_id)
+            game.generate_canonical_transitions(self._player_id) if self._symmetries else game.generate_possible_transitions(self._player_id)
         )
         # for each possible game transitions
         for _, state in transitions:
@@ -184,9 +180,7 @@ class MinMaxPlayer(Player):
         game = InvestigateGame(game)
         # get all possible game transitions or canonical transitions
         transitions = (
-            game.generate_canonical_transitions(self._player_id)
-            if self._symmetries
-            else game.generate_possible_transitions(self._player_id)
+            game.generate_canonical_transitions(self._player_id) if self._symmetries else game.generate_possible_transitions(self._player_id)
         )
         # for all possible actions and result states
         actions, states = zip(*transitions)
@@ -218,9 +212,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         """
         super().__init__(player_id, depth, symmetries)
 
-    def max_value(
-        self, game: 'Game', depth: int, alpha: float, beta: float
-    ) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
+    def max_value(self, game: 'Game', depth: int, alpha: float, beta: float) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
         """
         Perform a recursive traversal of the adversarial search tree
         for the Max player to a maximum depth by cutting off
@@ -247,9 +239,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         best_action = None
         # get all possible game transitions or canonical transitions
         transitions = (
-            game.generate_canonical_transitions(self._player_id)
-            if self._symmetries
-            else game.generate_possible_transitions(self._player_id)
+            game.generate_canonical_transitions(self._player_id) if self._symmetries else game.generate_possible_transitions(self._player_id)
         )
         # for each possible game transitions
         for action, state in transitions:
@@ -269,9 +259,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
                 return best_value, best_action
         return best_value, best_action
 
-    def min_value(
-        self, game: 'Game', depth: int, alpha: float, beta: float
-    ) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
+    def min_value(self, game: 'Game', depth: int, alpha: float, beta: float) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
         """
         Perform a recursive traversal of the adversarial search tree
         for the Min player to a maximum depth by cutting off

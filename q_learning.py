@@ -3,7 +3,7 @@ from typing import Literal
 import numpy as np
 import pickle
 import math
-from random import randint, random, choice
+from random import random, choice
 from tqdm import trange
 from random_player import RandomPlayer
 from collections import defaultdict
@@ -24,7 +24,7 @@ class QLearningRLPlayer(Player):
         min_exploration_rate: float,
         exploration_decay_rate: float,
         minmax: bool = False,
-        switch_ratio: int = .8,
+        switch_ratio: int = 0.8,
         depth: int = 1,
         symmetries: bool = False,
     ) -> None:
@@ -51,12 +51,8 @@ class QLearningRLPlayer(Player):
         self._alpha = alpha  # define how much information to incorporate from the new experience
         self._gamma = gamma  # define the discount rate of the Bellman equation
         self._exploration_rate = 1  # define the exploration rate for the training phase
-        self._min_exploration_rate = (
-            min_exploration_rate  # define the minimum rate for exploration during the training phase
-        )
-        self._exploration_decay_rate = (
-            exploration_decay_rate  # define the exploration decay rate used during the training
-        )
+        self._min_exploration_rate = min_exploration_rate  # define the minimum rate for exploration during the training phase
+        self._exploration_decay_rate = exploration_decay_rate  # define the exploration decay rate used during the training
         self._minmax = minmax  # define if we want to play also against minmax
         self._switch_ratio = switch_ratio  # define the moment in which minmax plays against us
         self._depth = depth  # define the depth for minmax
@@ -93,7 +89,7 @@ class QLearningRLPlayer(Player):
         """
         # take the current game state
         state = game.get_board()
-        # change not taken tiles values to 2
+        # change not taken tiles values to 0
         state += 1
         # map the state to a string in base 3
         state_repr_index = ''.join(str(_) for _ in state.flatten())
@@ -202,8 +198,7 @@ class QLearningRLPlayer(Player):
         all_rewards = []
         # save last action
         last_action = None
-        # define counter to terminate if we are in a loop
-        counter = 0
+
         # define how many episodes to run
         pbar_episodes = trange(self._n_episodes)
 
@@ -213,7 +208,10 @@ class QLearningRLPlayer(Player):
         # if we want to play also against minmax
         if self._minmax:
             # define the minmax players
-            minmax_players = ((MinMaxPlayer(player_id=0, depth=self._depth, symmetries=self._symmetries), self), (self, MinMaxPlayer(player_id=1, depth=self._depth, symmetries=self._symmetries)))
+            minmax_players = (
+                (MinMaxPlayer(player_id=0, depth=self._depth, symmetries=self._symmetries), self),
+                (self, MinMaxPlayer(player_id=1, depth=self._depth, symmetries=self._symmetries)),
+            )
 
         # for each episode
         for episode in pbar_episodes:
@@ -232,7 +230,10 @@ class QLearningRLPlayer(Player):
             players = player_tuples[-1]
             # define the current player index
             player_idx = 1
-            
+
+            # define counter to terminate if we are in a loop
+            counter = 0
+
             # if we can still play
             while winner < 0 and counter < max_steps_draw:
                 # change player
@@ -241,7 +242,6 @@ class QLearningRLPlayer(Player):
 
                 # if it is our turn
                 if self == player:
-
                     # get the current state representation
                     state_repr_index = self._map_state_to_index(game)
                     # get an action
@@ -262,7 +262,6 @@ class QLearningRLPlayer(Player):
 
                 # if it is the opponent turn
                 else:
-                    
                     # define a variable to check if the chosen move is ok or not
                     ok = False
                     # while the chosen move is not ok
@@ -276,9 +275,7 @@ class QLearningRLPlayer(Player):
                 winner = game.check_winner()
 
             # update the exploration rate
-            self._exploration_rate = np.clip(
-                np.exp(-self._exploration_decay_rate * episode), self._min_exploration_rate, 1
-            )
+            self._exploration_rate = np.clip(np.exp(-self._exploration_decay_rate * episode), self._min_exploration_rate, 1)
             # get the game reward
             reward = self._game_reward(player, winner)
             # update the action-value function
@@ -286,7 +283,9 @@ class QLearningRLPlayer(Player):
 
             # update the rewards history
             all_rewards.append(reward)
-            pbar_episodes.set_description(f'Win? {'Yes' if reward == 10 else ('Draw' if reward == 0 else 'No') } - Current exploration rate: {self._exploration_rate:2f}')
+            pbar_episodes.set_description(
+                f"Win? {'Yes' if reward == 10 else ('Draw' if reward == -1 else 'No') } - Current exploration rate: {self._exploration_rate:2f}"
+            )
 
         print(f'** Last 1_000 episodes - Mean rewards value: {sum(all_rewards[-1_000:]) / 1_000:.2f} **')
         print(f'** Last rewards value: {all_rewards[-1]:} **')
@@ -336,4 +335,4 @@ if __name__ == '__main__':
     # print the number of explored states
     print(f'Number of explored states: {len(q_learning_rl_agent._q_table.keys())}')
     # serialize the Q-learning player
-    q_learning_rl_agent.save('q_learning_rl_agent.pkl')
+    q_learning_rl_agent.save('agents/q_learning_rl_agent.pkl')

@@ -20,7 +20,7 @@ if __name__ == '__main__':
         exploration_decay_rate=1e-4,
         minmax=True,
     )
-    player2.load('q_learning_rl_agent.pkl')
+    player2.load('agents/q_learning_rl_agent.pkl')
     start = time.time()
     winner = g.play(player1, player2)
     total_time = time.time() - start
