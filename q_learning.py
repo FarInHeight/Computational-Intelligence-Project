@@ -2,9 +2,13 @@ from game import Game, Move, Player
 from typing import Literal
 import numpy as np
 import pickle
-from random import randint, random
+import math
+from random import randint, random, choice
 from tqdm import trange
 from random_player import RandomPlayer
+from collections import defaultdict
+from investigate_game import InvestigateGame
+from min_max import MinMaxPlayer
 
 
 class QLearningRLPlayer(Player):
@@ -19,7 +23,10 @@ class QLearningRLPlayer(Player):
         gamma: float,
         min_exploration_rate: float,
         exploration_decay_rate: float,
-        opponent: 'Player',
+        minmax: bool = False,
+        switch_ratio: int = .8,
+        depth: int = 1,
+        symmetries: bool = False,
     ) -> None:
         """
         The Q-learning player constructor.
@@ -30,7 +37,10 @@ class QLearningRLPlayer(Player):
             gamma: the discount rate of the Bellman equation;
             min_exploration_rate: the minimum rate for exploration during the training phase;
             exploration_decay_rate: the exploration decay rate used during the training;
-            opponent: the opponent to play against.
+            minmax: decide if the training must be performed also on minmax.
+            switch_ratio: define the moment in which we should play against minmax;
+            depth: maximum depth of the Min-Max search tree;
+            symmetries: flag to consider the symmetries or not.
 
         Returns:
             None.
@@ -47,31 +57,12 @@ class QLearningRLPlayer(Player):
         self._exploration_decay_rate = (
             exploration_decay_rate  # define the exploration decay rate used during the training
         )
-        self._opponent = opponent  # define the opponent to play against
+        self._minmax = minmax  # define if we want to play also against minmax
+        self._switch_ratio = switch_ratio  # define the moment in which minmax plays against us
+        self._depth = depth  # define the depth for minmax
+        self._symmetries = symmetries  # choose if play symmetries should be considered
 
-    def _move_reward(self, game: 'Game', move: tuple[int, int], player_id: int) -> tuple[Literal[-1, 1], bool]:
-        """
-        Try a move and return the corresponding reward.
-
-        Args:
-            game: a game instance;
-            move: the move to try;
-            player_id: my player's id.
-
-        Returns:
-            The reward and the acceptability of the move are returned.
-        """
-        # play a move
-        acceptable = game.move(move, player_id)
-        # give a negative reward to the agent
-        reward = -1
-        # if the move is acceptable
-        if acceptable:
-            # give a positive reward to the agent
-            reward = 1
-        return reward, acceptable
-
-    def _game_reward(self, player: 'Game', winner: int) -> Literal[-10, 0, 10]:
+    def _game_reward(self, player: 'InvestigateGame', winner: int) -> Literal[-10, 0, 10]:
         """
         Calculate the reward based on how the game ended.
 
@@ -82,12 +73,12 @@ class QLearningRLPlayer(Player):
         Returns:
             The game reward is returned.
         """
-        # if there was no winner
+        # if no one wins
         if winner == -1:
-            # return no reward
-            return 0
+            # return small penalty
+            return -1
         # if the agent is the winner
-        elif self == player:
+        if self == player:
             # give a big positive reward
             return 10
         # give a big negative reward, otherwise
@@ -101,9 +92,9 @@ class QLearningRLPlayer(Player):
             game: a game instance.
         """
         # take the current game state
-        state = game.board
+        state = game.get_board()
         # change not taken tiles values to 2
-        state[state == -1] = 2
+        state += 1
         # map the state to a string in base 3
         state_repr_index = ''.join(str(_) for _ in state.flatten())
         return state_repr_index
@@ -124,49 +115,52 @@ class QLearningRLPlayer(Player):
         # if the current state is unknown
         if state_repr_index not in self._q_table:
             # create its entry in the action-value mapping table
-            self._q_table[state_repr_index] = np.zeros((9,))
+            self._q_table[state_repr_index] = defaultdict(float)
         # if the next state is unknown
         if new_state_repr_index not in self._q_table:
             # create its entry in the action-value mapping table
-            self._q_table[new_state_repr_index] = np.zeros((9,))
+            self._q_table[new_state_repr_index] = defaultdict(float)
         prev_value = self._q_table[state_repr_index][action]
         # update the action-value mapping entry for the current state using Q-learning
         self._q_table[state_repr_index][action] = (1 - self._alpha) * prev_value + self._alpha * (
-            reward + self._gamma * (-np.max(self._q_table[new_state_repr_index]))
+            reward + self._gamma * (-max(self._q_table[new_state_repr_index].values(), default=0.0))
         )
 
-    def _make_move(self, game: 'Game') -> tuple[int, int]:
+    def _step_training(self, game: 'InvestigateGame', player_id: int) -> tuple[tuple[tuple[int, int], Move], 'InvestigateGame']:
         """
         Construct a move during the training phase to update the Q_table.
 
         Args:
-            game: a game instance.
+            game: a game instance;
+            player_id: my player's id.
 
         Returns:
             A move to play is returned.
         """
         # get the current state representation
         state_repr_index = self._map_state_to_index(game)
+        # get all possible transitions
+        transitions = game.generate_possible_transitions(player_id)
 
         # randomly perform exploration
         if random() < self._exploration_rate:
-            # by returning a random move
-            move = randint(0, 8)
+            # choose a random transition
+            transition = choice(transitions)
         # perform eploitation, otherwise
         else:
             # if the current state is unknown
             if state_repr_index not in self._q_table:
                 # create its entry in the action-value mapping table
-                self._q_table[state_repr_index] = np.zeros((9,))
-            # take the action with maximum return of rewards
-            move = np.argmax(self._q_table[state_repr_index])
+                self._q_table[state_repr_index] = defaultdict(float)
+                # choose a random transition
+                transition = choice(transitions)
+            else:
+                # take the action with maximum return of rewards
+                transition = max(transitions, key=lambda t: self._q_table[state_repr_index][t[0]])
 
-        # reshape the move to match the board shape
-        move = move // 3, move % 3
+        return transition
 
-        return move
-
-    def make_move(self, game: 'Game') -> tuple[int, int]:
+    def make_move(self, game: 'Game') -> tuple[tuple[int, int], Move]:
         """
         Construct a move to be played according to the Q_table.
 
@@ -176,87 +170,107 @@ class QLearningRLPlayer(Player):
         Returns:
             A move to play is returned.
         """
+        # create seperate instance of a game for investigation
+        game = InvestigateGame(game)
         # get the current state representation
         state_repr_index = self._map_state_to_index(game)
+        # get all possible transitions
+        actions, _ = zip(*game.generate_possible_transitions(game.get_current_player()))
         # if the current state is known
         if state_repr_index in self._q_table:
             # take the action with maximum return of rewards
-            move = np.argmax(self._q_table[state_repr_index])
-            # reshape the move to match the board shape
-            move = move // 3, move % 3
-            # if the move is acceptable
-            if game.is_acceptable(move):
-                # return it
-                return move
-        # perform a random move, otherwise
-        return (randint(0, game.board.shape[0] - 1), randint(0, game.board.shape[1] - 1))
+            action = max(actions, key=lambda a: self._q_table[state_repr_index][a])
+        else:
+            # choose a random action
+            action = choice(actions)
 
-    def train(self) -> None:
+        # return the action
+        return action
+
+    def train(self, max_steps_draw: int) -> list[float]:
         """
         Train the Q-learning player.
 
         Args:
-            None.
+            max_steps_draw: define the maximum number of steps before
+                            claiming a draw.
 
         Returns:
-            None.
+            The rewards history is returned.
         """
         # define the history of rewards
         all_rewards = []
+        # save last action
+        last_action = None
+        # define counter to terminate if we are in a loop
+        counter = 0
         # define how many episodes to run
-        pbar = trange(self._n_episodes)
-        # define the players
-        players = (self, self._opponent)
-        # for each episode
-        for episode in pbar:
-            # define a new game
-            game = Game()
-            # sets the rewards to zero
-            rewards = 0
+        pbar_episodes = trange(self._n_episodes)
 
+        # define the random tuples
+        player_tuples = ((RandomPlayer(), self), (self, RandomPlayer()))
+
+        # if we want to play also against minmax
+        if self._minmax:
+            # define the minmax players
+            minmax_players = ((MinMaxPlayer(player_id=0, depth=self._depth, symmetries=self._symmetries), self), (self, MinMaxPlayer(player_id=1, depth=self._depth, symmetries=self._symmetries)))
+
+        # for each episode
+        for episode in pbar_episodes:
+            # define a new game
+            game = InvestigateGame(Game())
             # define a variable to indicate if there is a winner
+
+            # switch the players if it is the moment
+            if self._minmax and math.isclose(self._switch_ratio, episode / self._n_episodes):
+                player_tuples = minmax_players
+
             winner = -1
+            # change player tuple order
+            player_tuples = (player_tuples[1], player_tuples[0])
             # change players order
-            players = (players[1], players[0])
+            players = player_tuples[-1]
             # define the current player index
             player_idx = 1
-
+            
             # if we can still play
-            while winner < 0 and game.is_still_playable():
+            while winner < 0 and counter < max_steps_draw:
                 # change player
                 player_idx = (player_idx + 1) % 2
                 player = players[player_idx]
 
-                # define a variable to check if the chosen move is ok or not
-                ok = False
                 # if it is our turn
                 if self == player:
-                    # while the chosen move is not ok
-                    while not ok:
-                        # get the current state representation
-                        state_repr_index = self._map_state_to_index(game)
-                        # get a move
-                        move = self._make_move(game)
-                        # reshape the move to form an index
-                        action = move[0] * 3 + move[1]
-                        # perform the move and get the reward
-                        reward, ok = self._move_reward(game, move, player_idx)
-                        # get the next state representation
-                        new_state_repr_index = self._map_state_to_index(game)
 
-                        # update the action-value function
-                        self._update_q_table(state_repr_index, new_state_repr_index, action, reward)
+                    # get the current state representation
+                    state_repr_index = self._map_state_to_index(game)
+                    # get an action
+                    action, game = self._step_training(game, player_idx)
+                    # get the next state representation
+                    new_state_repr_index = self._map_state_to_index(game)
 
-                        # update the rewards
-                        rewards += reward
+                    # if we play the same action as before
+                    if last_action == action:
+                        # increment the counter
+                        counter += 1
+                    # otherwise
+                    else:
+                        # save the new last action
+                        last_action = action
+                        # reset the counter
+                        counter = 0
+
                 # if it is the opponent turn
                 else:
+                    
+                    # define a variable to check if the chosen move is ok or not
+                    ok = False
                     # while the chosen move is not ok
                     while not ok:
                         # get a move
                         move = player.make_move(game)
                         # perform the move
-                        ok = game.move(move, player_idx)
+                        ok = game._Game__move(*move, player_idx)
 
                 # check if there is a winner
                 winner = game.check_winner()
@@ -269,14 +283,15 @@ class QLearningRLPlayer(Player):
             reward = self._game_reward(player, winner)
             # update the action-value function
             self._update_q_table(state_repr_index, new_state_repr_index, action, reward)
-            # update the rewards
-            rewards += reward
+
             # update the rewards history
-            all_rewards.append(rewards)
-            pbar.set_description(f'rewards value: {rewards}, current exploration rate: {self._exploration_rate:2f}')
+            all_rewards.append(reward)
+            pbar_episodes.set_description(f'Win? {'Yes' if reward == 10 else ('Draw' if reward == 0 else 'No') } - Current exploration rate: {self._exploration_rate:2f}')
 
         print(f'** Last 1_000 episodes - Mean rewards value: {sum(all_rewards[-1_000:]) / 1_000:.2f} **')
         print(f'** Last rewards value: {all_rewards[-1]:} **')
+
+        return all_rewards
 
     def save(self, path: str) -> None:
         """
@@ -308,16 +323,17 @@ class QLearningRLPlayer(Player):
 if __name__ == '__main__':
     # create the Q-learning player
     q_learning_rl_agent = QLearningRLPlayer(
-        n_episodes=500_000,
+        n_episodes=10_000,
         alpha=0.1,
         gamma=0.99,
         min_exploration_rate=0.01,
-        exploration_decay_rate=3e-6,
-        opponent=RandomPlayer(),
+        exploration_decay_rate=1e-4,
+        minmax=True,
     )
     # train the Q-learning player
-    q_learning_rl_agent.train()
+    all_rewards = q_learning_rl_agent.train(max_steps_draw=10)
+    print(all_rewards.count(-10), all_rewards.count(10), all_rewards.count(-1))
     # print the number of explored states
     print(f'Number of explored states: {len(q_learning_rl_agent._q_table.keys())}')
     # serialize the Q-learning player
-    q_learning_rl_agent.save()
+    q_learning_rl_agent.save('q_learning_rl_agent.pkl')
