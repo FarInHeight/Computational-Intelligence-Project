@@ -10,9 +10,9 @@ if __name__ == '__main__':
     g.print()
     player1 = AlphaBetaMinMaxPlayer(0, depth=1)
     # player1 = RandomPlayer()
-    # player2 = RandomPlayer()
+    player2 = RandomPlayer()
     # player2 = AlphaBetaMinMaxPlayer(1, depth=5, symmetries=True)
-    player2 = q_learning_rl_agent = QLearningRLPlayer(
+    """ player2 = q_learning_rl_agent = QLearningRLPlayer(
         n_episodes=10_000,
         alpha=0.1,
         gamma=0.99,
@@ -20,7 +20,7 @@ if __name__ == '__main__':
         exploration_decay_rate=1e-4,
         minmax=True,
     )
-    player2.load('agents/q_learning_rl_agent.pkl')
+    player2.load('agents/q_learning_rl_agent.pkl') """
     start = time.time()
     winner = g.play(player1, player2)
     total_time = time.time() - start
