@@ -9,6 +9,8 @@ from random_player import RandomPlayer
 from collections import defaultdict
 from investigate_game import InvestigateGame
 from min_max import MinMaxPlayer
+from symmetry import Symmetry
+from copy import deepcopy
 
 
 class QLearningRLPlayer(Player):
@@ -51,22 +53,19 @@ class QLearningRLPlayer(Player):
         self._alpha = alpha  # define how much information to incorporate from the new experience
         self._gamma = gamma  # define the discount rate of the Bellman equation
         self._exploration_rate = 1  # define the exploration rate for the training phase
-        self._min_exploration_rate = (
-            min_exploration_rate  # define the minimum rate for exploration during the training phase
-        )
-        self._exploration_decay_rate = (
-            exploration_decay_rate  # define the exploration decay rate used during the training
-        )
+        self._min_exploration_rate = min_exploration_rate  # define the minimum rate for exploration during the training phase
+        self._exploration_decay_rate = exploration_decay_rate  # define the exploration decay rate used during the training
         self._minmax = minmax  # define if we want to play also against minmax
         self._switch_ratio = switch_ratio  # define the moment in which minmax plays against us
         self._depth = depth  # define the depth for minmax
         self._symmetries = symmetries  # choose if play symmetries should be considered
         self._rewards = []  # list of the rewards obtained during training
+        self._sym = Symmetry()
 
     @property
     def rewards(self) -> list[int]:
         """
-        Return a copy the the rewards obtained during training
+        Return a copy of the rewards obtained during training
 
         Args:
             None.
@@ -76,7 +75,7 @@ class QLearningRLPlayer(Player):
         """
         return tuple(self._rewards)
 
-    def _game_reward(self, player: 'InvestigateGame', winner: int) -> Literal[-10, 0, 10]:
+    def _game_reward(self, player: 'InvestigateGame', winner: int) -> Literal[-10, -1, 10]:
         """
         Calculate the reward based on how the game ended.
 
@@ -98,7 +97,7 @@ class QLearningRLPlayer(Player):
         # give a big negative reward, otherwise
         return -10
 
-    def _map_state_to_index(self, game: 'Game', player_id: int) -> str:
+    def _map_state_to_index(self, game: 'Game', player_id: int) -> tuple['InvestigationGame', str, int]:
         """
         Given a game state, this function translates it into an index to access the Q_table.
 
@@ -106,13 +105,24 @@ class QLearningRLPlayer(Player):
             game: a game instance;
             player_id: my player's id.
         """
-        # take the current game state
-        state = game.get_board()
-        # change not taken tiles values to 0
-        state += 1
-        # map the state to a string in base 3
-        state_repr_index = ''.join(str(_) for _ in state.flatten()) + str(player_id)
-        return state_repr_index
+        # take trasformed states
+        trasformed_states = self._sym.get_transformed_states(game)
+        # list of mapped states to a string in base 3
+        trasformed_states_repr_index = []
+
+        # for each trasformed state
+        for trasformed_state in trasformed_states:
+            # copy of the state
+            state = deepcopy(trasformed_state)
+            # change not taken tiles values to 0
+            state._board += 1
+            # map the trasformed_state to a string in base 3
+            trasformed_states_repr_index.append(''.join(str(_) for _ in state._board.flatten()) + str(player_id))
+
+        # trasformation index
+        trasformation_index = np.argmin(trasformed_states_repr_index)
+
+        return trasformed_states[trasformation_index], trasformed_states_repr_index[trasformation_index], trasformation_index
 
     def _update_q_table(self, state_repr_index: str, new_state_repr_index: str, action: int, reward: int) -> None:
         """
@@ -142,20 +152,20 @@ class QLearningRLPlayer(Player):
         )
 
     def _step_training(
-        self, game: 'InvestigateGame', player_id: int
+        self, game: 'InvestigateGame', state_repr_index: str, player_id: int
     ) -> tuple[tuple[tuple[int, int], Move], 'InvestigateGame']:
         """
         Construct a move during the training phase to update the Q_table.
 
         Args:
             game: a game instance;
+            state_repr_index: hashable key for the state;
             player_id: my player's id.
 
         Returns:
             A move to play is returned.
         """
-        # get the current state representation
-        state_repr_index = self._map_state_to_index(game, player_id)
+
         # get all possible transitions
         transitions = game.generate_possible_transitions(player_id)
 
@@ -192,16 +202,19 @@ class QLearningRLPlayer(Player):
         # get my id
         player_id = game.get_current_player()
         # get the current state representation
-        state_repr_index = self._map_state_to_index(game, player_id)
+        game, state_repr_index, trasformation_index = self._map_state_to_index(game, player_id)
         # get all possible transitions
-        actions, _ = zip(*game.generate_possible_transitions(player_id))
+        canonical_actions, _ = zip(*game.generate_possible_transitions(player_id))
         # if the current state is known
         if state_repr_index in self._q_table:
             # take the action with maximum return of rewards
-            action = max(actions, key=lambda a: self._q_table[state_repr_index][a])
+            canonical_action = max(canonical_actions, key=lambda a: self._q_table[state_repr_index][a])
         else:
             # choose a random action
-            action = choice(actions)
+            canonical_action = choice(canonical_actions)
+
+        # get action for original state by mapping
+        action = self._sym.get_action_from_canonical_action(canonical_action, trasformation_index)
 
         # return the action
         return action
@@ -217,8 +230,6 @@ class QLearningRLPlayer(Player):
         Returns:
             None.
         """
-        # save last action
-        last_action = None
 
         # define how many episodes to run
         pbar_episodes = trange(self._n_episodes)
@@ -237,7 +248,7 @@ class QLearningRLPlayer(Player):
         # for each episode
         for episode in pbar_episodes:
             # define a new game
-            game = InvestigateGame(Game())
+            canonical_game = InvestigateGame(Game())
             # define a variable to indicate if there is a winner
 
             # switch the players if it is the moment
@@ -252,6 +263,8 @@ class QLearningRLPlayer(Player):
             # define the current player index
             player_idx = 1
 
+            # save last action
+            last_action = None
             # define counter to terminate if we are in a loop
             counter = 0
 
@@ -264,22 +277,22 @@ class QLearningRLPlayer(Player):
                 # if it is our turn
                 if self == player:
                     # get the current state representation
-                    state_repr_index = self._map_state_to_index(game, player_idx)
+                    canonical_game, canonical_state_repr_index, _ = self._map_state_to_index(canonical_game, player_idx)
                     # get an action
-                    action, game = self._step_training(game, player_idx)
+                    canonical_action, canonical_game = self._step_training(canonical_game, canonical_state_repr_index, player_idx)
                     # get the next state representation
-                    new_state_repr_index = self._map_state_to_index(game, player_idx)
+                    canonical_game, new_canonical_state_repr_index, _ = self._map_state_to_index(canonical_game, (player_idx + 1) % 2)
                     # update the action-value function
-                    self._update_q_table(state_repr_index, new_state_repr_index, action, reward=0)
+                    self._update_q_table(canonical_state_repr_index, new_canonical_state_repr_index, canonical_action, reward=0)
 
                     # if we play the same action as before
-                    if last_action == action:
+                    if last_action == canonical_action:
                         # increment the counter
                         counter += 1
                     # otherwise
                     else:
                         # save the new last action
-                        last_action = action
+                        last_action = canonical_action
                         # reset the counter
                         counter = 0
 
@@ -290,21 +303,19 @@ class QLearningRLPlayer(Player):
                     # while the chosen move is not ok
                     while not ok:
                         # get a move
-                        move = player.make_move(game)
+                        move = player.make_move(canonical_game)
                         # perform the move
-                        ok = game._Game__move(*move, player_idx)
+                        ok = canonical_game._Game__move(*move, player_idx)
 
                 # check if there is a winner
-                winner = game.check_winner()
+                winner = canonical_game.check_winner()
 
             # update the exploration rate
-            self._exploration_rate = np.clip(
-                np.exp(-self._exploration_decay_rate * episode), self._min_exploration_rate, 1
-            )
+            self._exploration_rate = np.clip(np.exp(-self._exploration_decay_rate * episode), self._min_exploration_rate, 1)
             # get the game reward
             reward = self._game_reward(player, winner)
             # update the action-value function
-            self._update_q_table(state_repr_index, new_state_repr_index, action, reward)
+            self._update_q_table(canonical_state_repr_index, new_canonical_state_repr_index, canonical_action, reward)
 
             # update the rewards history
             self._rewards.append(reward)
@@ -345,7 +356,7 @@ class QLearningRLPlayer(Player):
 if __name__ == '__main__':
     # create the Q-learning player
     q_learning_rl_agent = QLearningRLPlayer(
-        n_episodes=10_000,
+        n_episodes=1_000,
         alpha=0.1,
         gamma=0.99,
         min_exploration_rate=0.01,
@@ -361,4 +372,4 @@ if __name__ == '__main__':
     # print the number of explored states
     print(f'Number of explored states: {len(q_learning_rl_agent._q_table.keys())}')
     # serialize the Q-learning player
-    q_learning_rl_agent.save('agents/q_learning_rl_agent.pkl')
+    # q_learning_rl_agent.save('agents/q_learning_rl_agent.pkl')
