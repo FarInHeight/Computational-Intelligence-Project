@@ -51,12 +51,30 @@ class QLearningRLPlayer(Player):
         self._alpha = alpha  # define how much information to incorporate from the new experience
         self._gamma = gamma  # define the discount rate of the Bellman equation
         self._exploration_rate = 1  # define the exploration rate for the training phase
-        self._min_exploration_rate = min_exploration_rate  # define the minimum rate for exploration during the training phase
-        self._exploration_decay_rate = exploration_decay_rate  # define the exploration decay rate used during the training
+        self._min_exploration_rate = (
+            min_exploration_rate  # define the minimum rate for exploration during the training phase
+        )
+        self._exploration_decay_rate = (
+            exploration_decay_rate  # define the exploration decay rate used during the training
+        )
         self._minmax = minmax  # define if we want to play also against minmax
         self._switch_ratio = switch_ratio  # define the moment in which minmax plays against us
         self._depth = depth  # define the depth for minmax
         self._symmetries = symmetries  # choose if play symmetries should be considered
+        self._rewards = []  # list of the rewards obtained during training
+
+    @property
+    def rewards(self) -> list[int]:
+        """
+        Return a copy the the rewards obtained during training
+
+        Args:
+            None.
+
+        Returns:
+            The training rewards are returned.
+        """
+        return tuple(self._rewards)
 
     def _game_reward(self, player: 'InvestigateGame', winner: int) -> Literal[-10, 0, 10]:
         """
@@ -80,19 +98,20 @@ class QLearningRLPlayer(Player):
         # give a big negative reward, otherwise
         return -10
 
-    def _map_state_to_index(self, game: 'Game') -> str:
+    def _map_state_to_index(self, game: 'Game', player_id: int) -> str:
         """
         Given a game state, this function translates it into an index to access the Q_table.
 
         Args:
-            game: a game instance.
+            game: a game instance;
+            player_id: my player's id.
         """
         # take the current game state
         state = game.get_board()
         # change not taken tiles values to 0
         state += 1
         # map the state to a string in base 3
-        state_repr_index = ''.join(str(_) for _ in state.flatten())
+        state_repr_index = ''.join(str(_) for _ in state.flatten()) + str(player_id)
         return state_repr_index
 
     def _update_q_table(self, state_repr_index: str, new_state_repr_index: str, action: int, reward: int) -> None:
@@ -122,7 +141,9 @@ class QLearningRLPlayer(Player):
             reward + self._gamma * (-max(self._q_table[new_state_repr_index].values(), default=0.0))
         )
 
-    def _step_training(self, game: 'InvestigateGame', player_id: int) -> tuple[tuple[tuple[int, int], Move], 'InvestigateGame']:
+    def _step_training(
+        self, game: 'InvestigateGame', player_id: int
+    ) -> tuple[tuple[tuple[int, int], Move], 'InvestigateGame']:
         """
         Construct a move during the training phase to update the Q_table.
 
@@ -134,7 +155,7 @@ class QLearningRLPlayer(Player):
             A move to play is returned.
         """
         # get the current state representation
-        state_repr_index = self._map_state_to_index(game)
+        state_repr_index = self._map_state_to_index(game, player_id)
         # get all possible transitions
         transitions = game.generate_possible_transitions(player_id)
 
@@ -168,10 +189,12 @@ class QLearningRLPlayer(Player):
         """
         # create seperate instance of a game for investigation
         game = InvestigateGame(game)
+        # get my id
+        player_id = game.get_current_player()
         # get the current state representation
-        state_repr_index = self._map_state_to_index(game)
+        state_repr_index = self._map_state_to_index(game, player_id)
         # get all possible transitions
-        actions, _ = zip(*game.generate_possible_transitions(game.get_current_player()))
+        actions, _ = zip(*game.generate_possible_transitions(player_id))
         # if the current state is known
         if state_repr_index in self._q_table:
             # take the action with maximum return of rewards
@@ -183,7 +206,7 @@ class QLearningRLPlayer(Player):
         # return the action
         return action
 
-    def train(self, max_steps_draw: int) -> list[float]:
+    def train(self, max_steps_draw: int) -> None:
         """
         Train the Q-learning player.
 
@@ -192,10 +215,8 @@ class QLearningRLPlayer(Player):
                             claiming a draw.
 
         Returns:
-            The rewards history is returned.
+            None.
         """
-        # define the history of rewards
-        all_rewards = []
         # save last action
         last_action = None
 
@@ -243,11 +264,11 @@ class QLearningRLPlayer(Player):
                 # if it is our turn
                 if self == player:
                     # get the current state representation
-                    state_repr_index = self._map_state_to_index(game)
+                    state_repr_index = self._map_state_to_index(game, player_idx)
                     # get an action
                     action, game = self._step_training(game, player_idx)
                     # get the next state representation
-                    new_state_repr_index = self._map_state_to_index(game)
+                    new_state_repr_index = self._map_state_to_index(game, player_idx)
 
                     # if we play the same action as before
                     if last_action == action:
@@ -275,22 +296,22 @@ class QLearningRLPlayer(Player):
                 winner = game.check_winner()
 
             # update the exploration rate
-            self._exploration_rate = np.clip(np.exp(-self._exploration_decay_rate * episode), self._min_exploration_rate, 1)
+            self._exploration_rate = np.clip(
+                np.exp(-self._exploration_decay_rate * episode), self._min_exploration_rate, 1
+            )
             # get the game reward
             reward = self._game_reward(player, winner)
             # update the action-value function
             self._update_q_table(state_repr_index, new_state_repr_index, action, reward)
 
             # update the rewards history
-            all_rewards.append(reward)
+            self._rewards.append(reward)
             pbar_episodes.set_description(
                 f"Win? {'Yes' if reward == 10 else ('Draw' if reward == -1 else 'No') } - Current exploration rate: {self._exploration_rate:2f}"
             )
 
-        print(f'** Last 1_000 episodes - Mean rewards value: {sum(all_rewards[-1_000:]) / 1_000:.2f} **')
-        print(f'** Last rewards value: {all_rewards[-1]:} **')
-
-        return all_rewards
+        print(f'** Last 1_000 episodes - Mean rewards value: {sum(self._rewards[-1_000:]) / 1_000:.2f} **')
+        print(f'** Last rewards value: {self._rewards[-1]:} **')
 
     def save(self, path: str) -> None:
         """
@@ -330,8 +351,11 @@ if __name__ == '__main__':
         minmax=True,
     )
     # train the Q-learning player
-    all_rewards = q_learning_rl_agent.train(max_steps_draw=10)
-    print(all_rewards.count(-10), all_rewards.count(10), all_rewards.count(-1))
+    q_learning_rl_agent.train(max_steps_draw=10)
+    # get the rewards
+    rewards = q_learning_rl_agent.rewards
+    # print flash statistics
+    print(rewards.count(-10), rewards.count(10), rewards.count(-1))
     # print the number of explored states
     print(f'Number of explored states: {len(q_learning_rl_agent._q_table.keys())}')
     # serialize the Q-learning player

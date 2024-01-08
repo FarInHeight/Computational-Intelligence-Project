@@ -246,6 +246,6 @@ class InvestigateGame(Game):
         else:
             print(f"Winner: Player {winner}")
         # print the end of the game
-        print('-- BEGINNING OF THE GAME --')
+        print('-- END OF THE GAME --')
         # return the winner
         return winner
