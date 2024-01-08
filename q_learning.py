@@ -269,6 +269,8 @@ class QLearningRLPlayer(Player):
                     action, game = self._step_training(game, player_idx)
                     # get the next state representation
                     new_state_repr_index = self._map_state_to_index(game, player_idx)
+                    # update the action-value function
+                    self._update_q_table(state_repr_index, new_state_repr_index, action, reward=0)
 
                     # if we play the same action as before
                     if last_action == action:
