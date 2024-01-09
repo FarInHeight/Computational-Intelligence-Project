@@ -123,7 +123,17 @@ class InvestigateGame(Game):
             # increment index
             i += 1
 
-        return [transitions for transitions in transitions if transitions[1] in states]
+        # create a list of unique transitions
+        unique_transitions = []
+        # for each transition
+        for transition in transitions:
+            # check that it refers to a unique state and that another
+            # transition with the same final state has not already been added
+            if transition[1] in states and not any(map(lambda x: x[1] == transition[1], unique_transitions)):
+                # add another unique transition
+                unique_transitions.append(transition)
+
+        return unique_transitions
 
     def play(
         self,
