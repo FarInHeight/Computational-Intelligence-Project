@@ -13,15 +13,14 @@ from symmetry import Symmetry
 from copy import deepcopy
 
 
-class QLearningRLPlayer(Player):
+class MonteCarloRLPlayer(Player):
     """
-    Class representing player who learns to play thanks to the Q-learning technique.
+    Class representing player who learns to play thanks to the Monte Carlo-learning technique.
     """
 
     def __init__(
         self,
         n_episodes: int,
-        alpha: float,
         gamma: float,
         min_exploration_rate: float,
         exploration_decay_rate: float,
@@ -31,11 +30,10 @@ class QLearningRLPlayer(Player):
         symmetries: bool = False,
     ) -> None:
         """
-        The Q-learning player constructor.
+        The Monte Carlo-learning player constructor.
 
         Args:
             n_episodes: the number of episodes for the training phase;
-            alpha: how much information to incorporate from the new experience;
             gamma: the discount rate of the Bellman equation;
             min_exploration_rate: the minimum rate for exploration during the training phase;
             exploration_decay_rate: the exploration decay rate used during the training;
@@ -49,8 +47,8 @@ class QLearningRLPlayer(Player):
         """
         super().__init__()
         self._q_table = {}  # define the Action-value function
+        self._q_counters = {}  # define counters for the return of rewards
         self._n_episodes = n_episodes  # define the number of episodes for the training phase
-        self._alpha = alpha  # define how much information to incorporate from the new experience
         self._gamma = gamma  # define the discount rate of the Bellman equation
         self._exploration_rate = 1  # define the exploration rate for the training phase
         self._min_exploration_rate = (
@@ -131,34 +129,31 @@ class QLearningRLPlayer(Player):
             trasformation_index,
         )
 
-    def _update_q_table(self, state_repr_index: str, new_state_repr_index: str, action: int, reward: int) -> None:
+    def _update_q_table(self, state_repr_index: str, action: int, return_of_rewards: float) -> None:
         """
-        Update the Q_table according to the Q-learning update formula.
+        Update the Q_table according to the Monte Carlo-learning technique.
 
         Args:
             state_repr_index: the current state index;
-            new_state_repr_index: the next state index;
             action: the performed action;
-            reward: the reward obtained by applying the action on the current state.
+            return_of_rewards: the return of rewards for the current state.
 
         Returns:
             None.
         """
         # if the current state is unknown
-        if state_repr_index not in self._q_table:
+        if state_repr_index not in self._q_counters:
             # create its entry in the action-value mapping table
             self._q_table[state_repr_index] = defaultdict(float)
-        # if the next state is unknown
-        if new_state_repr_index not in self._q_table:
-            # create its entry in the action-value mapping table
-            self._q_table[new_state_repr_index] = defaultdict(float)
-        prev_value = self._q_table[state_repr_index][action]
-        # update the action-value mapping entry for the current state using Q-learning
-        self._q_table[state_repr_index][action] = (1 - self._alpha) * prev_value + self._alpha * (
-            reward + self._gamma * (-max(self._q_table[new_state_repr_index].values(), default=0.0))
+            # create its entry in the counters of the return of rewards
+            self._q_counters[state_repr_index] = defaultdict(float)
+        # update the counters of the return of rewards
+        self._q_counters[state_repr_index][action] += 1
+        # update the action-value mapping table
+        self._q_table[state_repr_index][action] = (
+            self._q_table[state_repr_index][action]
+            + (return_of_rewards - self._q_table[state_repr_index][action]) / self._q_counters[state_repr_index][action]
         )
-        if max(self._q_table[new_state_repr_index].values(), default=0.0) != 0:
-            print('update!')
 
     def _step_training(
         self, game: 'InvestigateGame', state_repr_index: str, player_id: int
@@ -230,7 +225,7 @@ class QLearningRLPlayer(Player):
 
     def train(self, max_steps_draw: int) -> None:
         """
-        Train the Q-learning player.
+        Train the Monte Carlo-learning player.
 
         Args:
             max_steps_draw: define the maximum number of steps before
@@ -242,7 +237,6 @@ class QLearningRLPlayer(Player):
 
         # define how many episodes to run
         pbar_episodes = trange(self._n_episodes)
-
         # define the random tuples
         player_tuples = ((RandomPlayer(), self), (self, RandomPlayer()))
 
@@ -258,11 +252,13 @@ class QLearningRLPlayer(Player):
         for episode in pbar_episodes:
             # define a new game
             canonical_game = InvestigateGame(Game())
-            # define a variable to indicate if there is a winner
 
             # switch the players if it is the moment
             if self._minmax and math.isclose(self._switch_ratio, episode / self._n_episodes):
                 player_tuples = minmax_players
+
+            # define the trajectory
+            trajectory = []
 
             # define a variable to indicate if there is a winner
             winner = -1
@@ -292,14 +288,9 @@ class QLearningRLPlayer(Player):
                     canonical_action, canonical_game = self._step_training(
                         canonical_game, canonical_state_repr_index, player_idx
                     )
-                    # get the next state representation
-                    canonical_game, new_canonical_state_repr_index, _ = self._map_state_to_index(
-                        canonical_game, (player_idx + 1) % 2
-                    )
-                    # update the action-value function
-                    self._update_q_table(
-                        canonical_state_repr_index, new_canonical_state_repr_index, canonical_action, reward=0
-                    )
+
+                    # update the trajectory
+                    trajectory.append((canonical_state_repr_index, canonical_action, 0))
 
                     # if we play the same action as before
                     if last_action == canonical_action:
@@ -330,15 +321,28 @@ class QLearningRLPlayer(Player):
             self._exploration_rate = np.clip(
                 np.exp(-self._exploration_decay_rate * episode), self._min_exploration_rate, 1
             )
+
+            # delete last tuple in trajectory
+            trajectory.pop()
             # get the game reward
             reward = self._game_reward(player, winner)
-            # update the action-value function
-            self._update_q_table(canonical_state_repr_index, new_canonical_state_repr_index, canonical_action, reward)
+            # update the trajectory
+            trajectory.append((canonical_state_repr_index, canonical_action, reward))
 
             # update the rewards history
             self._rewards.append(reward)
+
+            # set the current return of rewards
+            return_of_rewards = 0
+            # for all tuples in trajectory
+            for state_repr_index, action, reward in trajectory[::-1]:
+                # update the return of rewards
+                return_of_rewards = reward + self._gamma * return_of_rewards
+                # update the action-value function
+                self._update_q_table(state_repr_index, action, return_of_rewards)
+
             pbar_episodes.set_description(
-                f"Win? {'Yes' if reward == 10 else ('Draw' if reward == -1 else 'No') } - Current exploration rate: {self._exploration_rate:2f}"
+                f"# explored state: {len(self._q_table)} - Current exploration rate: {self._exploration_rate:2f}"
             )
 
         print(f'** Last 1_000 episodes - Mean rewards value: {sum(self._rewards[-1_000:]) / 1_000:.2f} **')
@@ -346,48 +350,47 @@ class QLearningRLPlayer(Player):
 
     def save(self, path: str) -> None:
         """
-        Serialize the current Q-learning player's state.
+        Serialize the current Monte Carlo learning player's state.
 
         Args:
             path: location where to save the player's state.
 
         Returns: None.
         """
-        # serialize the Q-learning player
+        # serialize the Monte Carlo learning player
         with open(path, 'wb') as f:
             pickle.dump(self.__dict__, f)
 
     def load(self, path: str) -> None:
         """
-        Load a Q-learning player's state into the current player.
+        Load a Monte Carlo earning player's state into the current player.
 
         Args:
             path: location from which to load the player's state.
 
         Returns: None.
         """
-        # load the serialized Q-learning player
+        # load the serialized Monte Carlo learning player
         with open(path, 'rb') as f:
             self.__dict__ = pickle.load(f)
 
 
 if __name__ == '__main__':
     # create the Q-learning player
-    q_learning_rl_agent = QLearningRLPlayer(
+    monte_carlo_rl_agent = MonteCarloRLPlayer(
         n_episodes=1_000,
-        alpha=0.1,
         gamma=0.99,
         min_exploration_rate=0.01,
         exploration_decay_rate=1e-4,
         minmax=True,
     )
     # train the Q-learning player
-    q_learning_rl_agent.train(max_steps_draw=10)
+    monte_carlo_rl_agent.train(max_steps_draw=10)
     # get the rewards
-    rewards = q_learning_rl_agent.rewards
+    rewards = monte_carlo_rl_agent.rewards
     # print flash statistics
     print(rewards.count(-10), rewards.count(10), rewards.count(-1))
     # print the number of explored states
-    print(f'Number of explored states: {len(q_learning_rl_agent._q_table.keys())}')
+    print(f'Number of explored states: {len(monte_carlo_rl_agent._q_table.keys())}')
     # serialize the Q-learning player
-    # q_learning_rl_agent.save('agents/q_learning_rl_agent.pkl')
+    monte_carlo_rl_agent.save('agents/monte_carlo_rl_agent.pkl')

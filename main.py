@@ -7,10 +7,9 @@ import time
 from investigate_game import InvestigateGame
 
 if __name__ == '__main__':
-    '''
-    g = Game()
+    '''g = Game()
     g.print()
-    player1 = AlphaBetaMinMaxPlayer(0, depth=2, symmetries=True)
+    player1 = AlphaBetaMinMaxPlayer(0, depth=3, symmetries=False)
     # player1 = RandomPlayer()
     player2 = RandomPlayer()
     # player2 = AlphaBetaMinMaxPlayer(1, depth=5, symmetries=True)
@@ -28,7 +27,6 @@ if __name__ == '__main__':
     total_time = time.time() - start
     g.print()
     print(f"Winner: Player {winner}")
-    print(f'Game duration: {total_time:.2E} sec, {total_time / 60:.2E} min')
-    '''
+    print(f'Game duration: {total_time:.2E} sec, {total_time / 60:.2E} min')'''
     g = InvestigateGame(Game())
     print(len(g.generate_canonical_transitions(0)))

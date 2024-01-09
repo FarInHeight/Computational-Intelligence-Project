@@ -19,76 +19,76 @@ class Symmetry:
 
     '''
 
-    def __init__(self) -> None:
-        self._rotations = [lambda x: np.rot90(x, k=k) for k in range(1, 4)]
-        self._flips = [lambda x: deepcopy(x), lambda x: np.flipud(x)]
-        # mapping of canonical slide to original slide
-        self._map_canonical_slide_to_original_slide = {
-            1: {
-                Move.BOTTOM: Move.LEFT,
-                Move.LEFT: Move.TOP,
-                Move.RIGHT: Move.BOTTOM,
-                Move.TOP: Move.RIGHT,
-            },
-            2: {
-                Move.LEFT: Move.RIGHT,
-                Move.RIGHT: Move.LEFT,
-                Move.BOTTOM: Move.TOP,
-                Move.TOP: Move.BOTTOM,
-            },
-            3: {
-                Move.LEFT: Move.BOTTOM,
-                Move.RIGHT: Move.TOP,
-                Move.BOTTOM: Move.RIGHT,
-                Move.TOP: Move.LEFT,
-            },
-            4: {
-                Move.LEFT: Move.LEFT,
-                Move.RIGHT: Move.RIGHT,
-                Move.BOTTOM: Move.TOP,
-                Move.TOP: Move.BOTTOM,
-            },
-            5: {
-                Move.LEFT: Move.BOTTOM,
-                Move.RIGHT: Move.TOP,
-                Move.BOTTOM: Move.LEFT,
-                Move.TOP: Move.RIGHT,
-            },
-            6: {
-                Move.LEFT: Move.RIGHT,
-                Move.RIGHT: Move.LEFT,
-                Move.BOTTOM: Move.BOTTOM,
-                Move.TOP: Move.TOP,
-            },
-            7: {
-                Move.BOTTOM: Move.RIGHT,
-                Move.LEFT: Move.TOP,
-                Move.RIGHT: Move.BOTTOM,
-                Move.TOP: Move.LEFT,
-            },
-        }
-        # canonical from position
-        self._canonical_positions = np.array(
-            [
-                [(0, 0), (0, 1), (0, 2), (0, 3), (0, 4)],
-                [(1, 0), (1, 1), (1, 2), (1, 3), (1, 4)],
-                [(2, 0), (2, 1), (2, 2), (2, 3), (2, 4)],
-                [(3, 0), (3, 1), (3, 2), (3, 3), (3, 4)],
-                [(4, 0), (4, 1), (4, 2), (4, 3), (4, 4)],
-            ]
-        )
-        # mapping trasformation - trasformed from position
-        self._trasformed_positions = {
-            1: np.rot90(self._canonical_positions, axes=(0, 1)),
-            2: np.rot90(self._canonical_positions, k=2, axes=(0, 1)),
-            3: np.rot90(self._canonical_positions, k=3, axes=(0, 1)),
-            4: np.flipud(self._canonical_positions),
-            5: np.rot90(np.flipud(self._canonical_positions), axes=(0, 1)),
-            6: np.rot90(np.flipud(self._canonical_positions), k=2, axes=(0, 1)),
-            7: np.rot90(np.flipud(self._canonical_positions), k=3, axes=(0, 1)),
-        }
+    rotations = [lambda x: np.rot90(x, k=1), lambda x: np.rot90(x, k=2), lambda x: np.rot90(x, k=3)]
+    flips = [lambda x: deepcopy(x), lambda x: np.flipud(x)]
+    # mapping of canonical slide to original slide
+    map_canonical_slide_to_original_slide = {
+        1: {
+            Move.BOTTOM: Move.LEFT,
+            Move.LEFT: Move.TOP,
+            Move.RIGHT: Move.BOTTOM,
+            Move.TOP: Move.RIGHT,
+        },
+        2: {
+            Move.LEFT: Move.RIGHT,
+            Move.RIGHT: Move.LEFT,
+            Move.BOTTOM: Move.TOP,
+            Move.TOP: Move.BOTTOM,
+        },
+        3: {
+            Move.LEFT: Move.BOTTOM,
+            Move.RIGHT: Move.TOP,
+            Move.BOTTOM: Move.RIGHT,
+            Move.TOP: Move.LEFT,
+        },
+        4: {
+            Move.LEFT: Move.LEFT,
+            Move.RIGHT: Move.RIGHT,
+            Move.BOTTOM: Move.TOP,
+            Move.TOP: Move.BOTTOM,
+        },
+        5: {
+            Move.LEFT: Move.BOTTOM,
+            Move.RIGHT: Move.TOP,
+            Move.BOTTOM: Move.LEFT,
+            Move.TOP: Move.RIGHT,
+        },
+        6: {
+            Move.LEFT: Move.RIGHT,
+            Move.RIGHT: Move.LEFT,
+            Move.BOTTOM: Move.BOTTOM,
+            Move.TOP: Move.TOP,
+        },
+        7: {
+            Move.BOTTOM: Move.RIGHT,
+            Move.LEFT: Move.TOP,
+            Move.RIGHT: Move.BOTTOM,
+            Move.TOP: Move.LEFT,
+        },
+    }
+    # canonical from position
+    canonical_positions = np.array(
+        [
+            [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)],
+            [(0, 1), (1, 1), (2, 1), (3, 1), (4, 1)],
+            [(0, 2), (1, 2), (2, 2), (3, 2), (4, 2)],
+            [(0, 3), (1, 3), (2, 3), (3, 3), (4, 3)],
+            [(0, 4), (1, 4), (2, 4), (3, 4), (4, 4)],
+        ]
+    )
+    # mapping trasformation - trasformed from position
+    trasformed_positions = {
+        1: np.rot90(canonical_positions, k=-1),
+        2: np.rot90(canonical_positions, k=-2),
+        3: np.rot90(canonical_positions, k=-3),
+        4: np.flipud(canonical_positions),
+        5: np.flipud(np.rot90(canonical_positions, k=-1)),
+        6: np.flipud(np.rot90(canonical_positions, k=-2)),
+        7: np.flipud(np.rot90(canonical_positions, k=-3)),
+    }
 
-    def get_transformed_states(self, game) -> list['InvestigateGame']:
+    @classmethod
+    def get_transformed_states(cls, game) -> list['InvestigateGame']:
         '''
         Apply all possible transformations to the state and return a list of equivalent transformed states.
         To compute all equivalent states, apply:
@@ -111,27 +111,30 @@ class Symmetry:
         transformed_states = []
 
         # for each flip
-        for flip in self._flips:
+        for flip in Symmetry.flips:
             # copy of the state
             new_state = deepcopy(game)
             # transform the board
-            flipped_board = flip(game._board)
+            flipped_board = flip(new_state._board)
             # new flipped state
             new_state._board = flipped_board
             # append transformed state
             transformed_states.append(new_state)
             # add rotated states
-            for rotate in self._rotations:
+            for rotate in Symmetry.rotations:
                 # copy of the state
                 rotated_new_state = deepcopy(new_state)
                 # transform the board
-                rotated_new_state._board = rotate(new_state._board)
+                rotated_new_state._board = rotate(rotated_new_state._board)
                 # append transformed state
                 transformed_states.append(rotated_new_state)
 
         return transformed_states
 
-    def get_action_from_canonical_action(self, action: tuple[tuple[int, int], Move], transformation_index: int) -> tuple[tuple[int, int], Move]:
+    @classmethod
+    def get_action_from_canonical_action(
+        cls, action: tuple[tuple[int, int], Move], transformation_index: int
+    ) -> tuple[tuple[int, int], Move]:
         '''
         Gives the corresponding action for a state compared to the canonical state.
 
@@ -145,7 +148,9 @@ class Symmetry:
         if transformation_index == 0:
             return action
 
+        from_pos, slide = action
+
         return (
-            self._trasformed_positions[transformation_index][action[0]],
-            self._map_canonical_slide_to_original_slide[transformation_index][action[1]],
+            tuple(Symmetry.trasformed_positions[transformation_index][from_pos]),
+            Symmetry.map_canonical_slide_to_original_slide[transformation_index][slide],
         )
