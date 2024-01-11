@@ -20,10 +20,10 @@ class MonteCarloRLPlayer(Player):
 
     def __init__(
         self,
-        n_episodes: int,
-        gamma: float,
-        min_exploration_rate: float,
-        exploration_decay_rate: float,
+        n_episodes: int = 100_000,
+        gamma: float = 0.99,
+        min_exploration_rate: float = 0.01,
+        exploration_decay_rate: float = 1e-5,
         minmax: bool = False,
         switch_ratio: int = 0.8,
         depth: int = 1,
@@ -51,12 +51,8 @@ class MonteCarloRLPlayer(Player):
         self._n_episodes = n_episodes  # define the number of episodes for the training phase
         self._gamma = gamma  # define the discount rate of the Bellman equation
         self._exploration_rate = 1  # define the exploration rate for the training phase
-        self._min_exploration_rate = (
-            min_exploration_rate  # define the minimum rate for exploration during the training phase
-        )
-        self._exploration_decay_rate = (
-            exploration_decay_rate  # define the exploration decay rate used during the training
-        )
+        self._min_exploration_rate = min_exploration_rate  # define the minimum rate for exploration during the training phase
+        self._exploration_decay_rate = exploration_decay_rate  # define the exploration decay rate used during the training
         self._minmax = minmax  # define if we want to play also against minmax
         self._switch_ratio = switch_ratio  # define the moment in which minmax plays against us
         self._depth = depth  # define the depth for minmax
@@ -285,9 +281,7 @@ class MonteCarloRLPlayer(Player):
                     # get the current state representation
                     canonical_game, canonical_state_repr_index, _ = self._map_state_to_index(canonical_game, player_idx)
                     # get an action
-                    canonical_action, canonical_game = self._step_training(
-                        canonical_game, canonical_state_repr_index, player_idx
-                    )
+                    canonical_action, canonical_game = self._step_training(canonical_game, canonical_state_repr_index, player_idx)
 
                     # update the trajectory
                     trajectory.append((canonical_state_repr_index, canonical_action, 0))
@@ -318,9 +312,7 @@ class MonteCarloRLPlayer(Player):
                 winner = canonical_game.check_winner()
 
             # update the exploration rate
-            self._exploration_rate = np.clip(
-                np.exp(-self._exploration_decay_rate * episode), self._min_exploration_rate, 1
-            )
+            self._exploration_rate = np.clip(np.exp(-self._exploration_decay_rate * episode), self._min_exploration_rate, 1)
 
             # delete last tuple in trajectory
             trajectory.pop()
@@ -341,9 +333,7 @@ class MonteCarloRLPlayer(Player):
                 # update the action-value function
                 self._update_q_table(state_repr_index, action, return_of_rewards)
 
-            pbar_episodes.set_description(
-                f"# explored state: {len(self._q_table)} - Current exploration rate: {self._exploration_rate:2f}"
-            )
+            pbar_episodes.set_description(f"# explored state: {len(self._q_table):,} - Current exploration rate: {self._exploration_rate:2f}")
 
         print(f'** Last 1_000 episodes - Mean rewards value: {sum(self._rewards[-1_000:]) / 1_000:.2f} **')
         print(f'** Last rewards value: {self._rewards[-1]:} **')
