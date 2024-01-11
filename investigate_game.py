@@ -24,6 +24,7 @@ class InvestigateGame(Game):
         '''
         super().__init__()
         self._board = game.get_board()
+        self.current_player_idx = game.get_current_player()
         self._player_to_symbol = {-1: '⬜️', 0: '❌', 1: '⭕️'}
 
     def print(self) -> None:
@@ -167,7 +168,7 @@ class InvestigateGame(Game):
         # define the players
         players = [player1, player2]
         # set the moving player index
-        current_player_idx = 1
+        self.current_player_idx = 1
         # define a variable to indicate if there is a winner
         winner = -1
         # define counter to terminate if we are in a loop
@@ -177,28 +178,28 @@ class InvestigateGame(Game):
         # if we can still play
         while winner < 0 and counter < max_steps_draw:
             # update the current moving player index
-            current_player_idx += 1
-            current_player_idx %= len(players)
+            self.current_player_idx += 1
+            self.current_player_idx %= len(players)
             # define a variable to check if the chosen move is ok or not
             ok = False
             # while the chosen move is not ok
             while not ok:
                 # let the current player make a move
-                from_pos, slide = players[current_player_idx].make_move(self)
+                from_pos, slide = players[self.current_player_idx].make_move(self)
                 # check if now it is ok
-                ok = self._Game__move(from_pos, slide, current_player_idx)
+                ok = self._Game__move(from_pos, slide, self.current_player_idx)
             # if we play the same action as before
-            if last_actions[current_player_idx] == (from_pos, slide):
+            if last_actions[self.current_player_idx] == (from_pos, slide):
                 # increment the counter
                 counter += 0.5
             # otherwise
             else:
                 # save the new last action
-                last_actions[current_player_idx] = (from_pos, slide)
+                last_actions[self.current_player_idx] = (from_pos, slide)
                 # reset the counter
                 counter = 0
             # print the move
-            print(f'Player {self._player_to_symbol[current_player_idx]} chose to move {from_pos} to the {slide.name.lower()}')
+            print(f'Player {self._player_to_symbol[self.current_player_idx]} chose to move {from_pos} to the {slide.name.lower()}')
             # print the board
             self.print()
             # check if there is a winner

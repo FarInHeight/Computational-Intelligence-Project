@@ -333,7 +333,7 @@ class MonteCarloRLPlayer(Player):
                 # update the action-value function
                 self._update_q_table(state_repr_index, action, return_of_rewards)
 
-            pbar_episodes.set_description(f"# explored state: {len(self._q_table):,} - Current exploration rate: {self._exploration_rate:2f}")
+            pbar_episodes.set_description(f"# explored states: {len(self._q_table):,} - Current exploration rate: {self._exploration_rate:2f}")
 
         print(f'** Last 1_000 episodes - Mean rewards value: {sum(self._rewards[-1_000:]) / 1_000:.2f} **')
         print(f'** Last rewards value: {self._rewards[-1]:} **')
