@@ -59,7 +59,16 @@ class InvestigateGame(Game):
         '''
         return (self._board == other._board).all()
 
-    def get_hashable_state(self, player_id: int):
+    def get_hashable_state(self, player_id: int) -> str:
+        '''
+        Get a unique representation of a state that can be used as a key for a dictionary.
+
+        Args:
+           player_id: the player's id.
+
+        Returns:
+            A string representation of the state is returned
+        '''
         # copy of the state
         state = deepcopy(self)
         # change not taken tiles values to 0
@@ -67,7 +76,9 @@ class InvestigateGame(Game):
         # map the trasformed_state to a string in base 3
         return ''.join(str(_) for _ in state._board.flatten()) + str(player_id)
 
-    def generate_possible_transitions(self, player_id: int) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
+    def generate_possible_transitions(
+        self, player_id: int
+    ) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
         '''
         Generate all possible game transitions that a given player can make.
 
@@ -99,7 +110,9 @@ class InvestigateGame(Game):
 
         return transitions
 
-    def generate_canonical_transitions(self, player_id: int) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
+    def generate_canonical_transitions(
+        self, player_id: int
+    ) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
         '''
         Generate all possible game transitions that a given player can make considering the canonical states.
 
@@ -199,7 +212,9 @@ class InvestigateGame(Game):
                 # reset the counter
                 counter = 0
             # print the move
-            print(f'Player {self._player_to_symbol[self.current_player_idx]} chose to move {from_pos} to the {slide.name.lower()}')
+            print(
+                f'Player {self._player_to_symbol[self.current_player_idx]} chose to move {from_pos} to the {slide.name.lower()}'
+            )
             # print the board
             self.print()
             # check if there is a winner

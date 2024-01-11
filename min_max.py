@@ -135,13 +135,17 @@ class MinMaxPlayer(Player):
 
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
+            # save max_value in hash_table
+            self._visited_max_states[key][0] = value
             # return its heuristic value
             return self.evaluation_function(game)
         # set the current best max value
         value = float('-inf')
         # get all possible game transitions or canonical transitions
         transitions = (
-            game.generate_canonical_transitions(self._player_id) if self._symmetries else game.generate_possible_transitions(self._player_id)
+            game.generate_canonical_transitions(self._player_id)
+            if self._symmetries
+            else game.generate_possible_transitions(self._player_id)
         )
         # for each possible game transitions
         for _, state in transitions:
@@ -177,6 +181,8 @@ class MinMaxPlayer(Player):
 
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
+            # save min_value in hash_table
+            self._visited_min_states[key][0] = value
             # return its heuristic value
             return self.evaluation_function(game)
         # set the current best min value
@@ -210,7 +216,9 @@ class MinMaxPlayer(Player):
         game = InvestigateGame(game)
         # get all possible game transitions or canonical transitions
         transitions = (
-            game.generate_canonical_transitions(self._player_id) if self._symmetries else game.generate_possible_transitions(self._player_id)
+            game.generate_canonical_transitions(self._player_id)
+            if self._symmetries
+            else game.generate_possible_transitions(self._player_id)
         )
         # for all possible actions and result states
         actions, states = zip(*transitions)
@@ -268,7 +276,21 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         """
         super().__init__(player_id, depth, symmetries)
 
-    def max_value(self, game: 'Game', depth: int, alpha: float, beta: float) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
+    def __default_value(self) -> tuple[0, None]:
+        """
+        Implement a default factoty method for defaultdic.
+
+        Args:
+            None.
+
+        Returns:
+            A default value is returned.
+        """
+        return (0, None)
+
+    def max_value(
+        self, game: 'Game', depth: int, alpha: float, beta: float
+    ) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
         """
         Perform a recursive traversal of the adversarial search tree
         for the Max player to a maximum depth by cutting off
@@ -294,19 +316,26 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             self._hit += 1
             return self._visited_max_states[key][depth]
         else:
-            self._visited_max_states[key] = defaultdict(lambda: (0, 0))
+            self._visited_max_states[key] = defaultdict(self.__default_value)
 
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
+            # get terminal value
+            value = self.evaluation_function(game)
+            # save min_value in hash_table
+            self._visited_max_states[key][depth] = (value, None)
             # return its heuristic value and no move
-            return self.evaluation_function(game), None
+            return value, None
+
         # set the current best max value
         best_value = float('-inf')
         # set the current best move
         best_action = None
         # get all possible game transitions or canonical transitions
         transitions = (
-            game.generate_canonical_transitions(self._player_id) if self._symmetries else game.generate_possible_transitions(self._player_id)
+            game.generate_canonical_transitions(self._player_id)
+            if self._symmetries
+            else game.generate_possible_transitions(self._player_id)
         )
         # for each possible game transitions
         for action, state in transitions:
@@ -331,7 +360,9 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         self._visited_max_states[key][depth] = (best_value, best_action)
         return best_value, best_action
 
-    def min_value(self, game: 'Game', depth: int, alpha: float, beta: float) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
+    def min_value(
+        self, game: 'Game', depth: int, alpha: float, beta: float
+    ) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
         """
         Perform a recursive traversal of the adversarial search tree
         for the Min player to a maximum depth by cutting off
@@ -356,12 +387,17 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             self._hit += 1
             return self._visited_min_states[key][depth]
         else:
-            self._visited_min_states[key] = defaultdict(lambda: (0, 0))
+            self._visited_min_states[key] = defaultdict(self.__default_value)
 
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
+            # get terminal value
+            value = self.evaluation_function(game)
+            # save min_value in hash_table
+            self._visited_min_states[key][depth] = (best_value, best_action)
             # return its heuristic value and no move
-            return self.evaluation_function(game), None
+            return value, None
+
         # set the current best min value
         best_value = float('inf')
         # set the current best move
@@ -393,7 +429,6 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
 
         # save min_value in hash_table
         self._visited_min_states[key][depth] = (best_value, best_action)
-
         return best_value, best_action
 
     def make_move(self, game: 'Game') -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
