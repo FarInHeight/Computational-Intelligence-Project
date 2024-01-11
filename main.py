@@ -6,11 +6,12 @@ from q_learning import QLearningRLPlayer
 import time
 from investigate_game import InvestigateGame
 
+
 if __name__ == '__main__':
     g = Game()
     g.print()
-    player1 = AlphaBetaMinMaxPlayer(0, depth=5, symmetries=True)
     # player1 = RandomPlayer()
+    player1 = AlphaBetaMinMaxPlayer(0, depth=2, symmetries=True)
     player2 = RandomPlayer()
     # player2 = AlphaBetaMinMaxPlayer(1, depth=5, symmetries=True)
     """ player2 = q_learning_rl_agent = QLearningRLPlayer(
@@ -22,11 +23,15 @@ if __name__ == '__main__':
         minmax=True,
     )
     player2.load('agents/q_learning_rl_agent.pkl') """
-    start = time.time()
-    winner = g.play(player1, player2)
-    total_time = time.time() - start
-    g.print()
-    print(f"Winner: Player {winner}")
-    print(f'Game duration: {total_time:.2E} sec, {total_time / 60:.2E} min')
+    for i in range(10):
+        g = Game()
+        start = time.time()
+        winner = g.play(player1, player2)
+        total_time = time.time() - start
+        g.print()
+        print(f"Winner: Player {winner}")
+        print(f'Game duration: {total_time:.2E} sec, {total_time / 60:.2E} min')
+        print(f'Hash table HIT: {player1._hit}')
+        player1.reset_hit()
     # g = InvestigateGame(Game())
     # print(len(g.generate_canonical_transitions(0)))

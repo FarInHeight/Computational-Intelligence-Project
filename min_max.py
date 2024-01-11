@@ -2,6 +2,8 @@ import numpy as np
 import time
 from game import Game, Move, Player
 from investigate_game import InvestigateGame
+from collections import defaultdict
+import pickle
 
 
 class MinMaxPlayer(Player):
@@ -26,6 +28,9 @@ class MinMaxPlayer(Player):
         self._opponent_player_id = abs(1 - self._player_id)
         self._depth = depth
         self._symmetries = symmetries
+        self._visited_max_states = {}
+        self._visited_min_states = {}
+        self._hit = 0
 
     def evaluation_function(self, game: 'InvestigateGame') -> int | float:
         """
@@ -118,6 +123,16 @@ class MinMaxPlayer(Player):
             The evaluation function value of the best move to play
             for Max is returned.
         """
+        # get hashable state
+        key = game.get_hashable_state(self._player_id)
+
+        # check if this max_value is already in hash table
+        if key in self._visited_max_states and depth in self._visited_max_states[key].keys():
+            self._hit += 1
+            return self._visited_max_states[key][depth]
+        else:
+            self._visited_max_states[key] = defaultdict(float)
+
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
             # return its heuristic value
@@ -132,6 +147,9 @@ class MinMaxPlayer(Player):
         for _, state in transitions:
             # update the current max value
             value = max(value, self.min_value(state, depth - 1))
+
+        # save max_value in hash_table
+        self._visited_max_states[key][depth] = value
         return value
 
     def min_value(self, game: 'InvestigateGame', depth: int) -> int | float:
@@ -147,6 +165,15 @@ class MinMaxPlayer(Player):
             The evaluation function value of the best move to play
             for Min is returned.
         """
+        # get hashable state
+        key = game.get_hashable_state(self._player_id)
+
+        # check if this max_value is already in hash table
+        if key in self._visited_min_states and depth in self._visited_min_states[key].keys():
+            self._hit += 1
+            return self._visited_min_states[key][depth]
+        else:
+            self._visited_min_states[key] = defaultdict(float)
 
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
@@ -164,6 +191,9 @@ class MinMaxPlayer(Player):
         for _, state in transitions:
             # update the current min value
             value = min(value, self.max_value(state, depth - 1))
+
+        # save min_value in hash_table
+        self._visited_min_states[key][depth] = value
         return value
 
     def make_move(self, game: 'Game') -> tuple[tuple[int, int], Move]:
@@ -190,6 +220,32 @@ class MinMaxPlayer(Player):
         _, action = tuple_
         # return it
         return action
+
+    def save(self, path: str) -> None:
+        """
+        Serialize the current MinMax player's state.
+
+        Args:
+            path: location where to save the player's state.
+
+        Returns: None.
+        """
+        # serialize the Monte Carlo learning player
+        with open(path, 'wb') as f:
+            pickle.dump(self.__dict__, f)
+
+    def load(self, path: str) -> None:
+        """
+        Load a MinMax player's state into the current player.
+
+        Args:
+            path: location from which to load the player's state.
+
+        Returns: None.
+        """
+        # load the serialized Monte Carlo learning player
+        with open(path, 'rb') as f:
+            self.__dict__ = pickle.load(f)
 
 
 class AlphaBetaMinMaxPlayer(MinMaxPlayer):
@@ -229,6 +285,17 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             The evaluation function value of the best move to play
             for Max and the move itsef are returned.
         """
+
+        # get hashable state
+        key = game.get_hashable_state(self._player_id)
+
+        # check if this max_value is already in hash table
+        if key in self._visited_max_states and depth in self._visited_max_states[key].keys():
+            self._hit += 1
+            return self._visited_max_states[key][depth]
+        else:
+            self._visited_max_states[key] = defaultdict(lambda: (0, 0))
+
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
             # return its heuristic value and no move
@@ -255,8 +322,13 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
                 alpha = max(alpha, best_value)
             # if the value for the best Min ancestor cannot be improved
             if best_value >= beta:
+                # save min_value in hash_table
+                self._visited_max_states[key][depth] = (best_value, best_action)
                 # terminate the search
                 return best_value, best_action
+
+        # save min_value in hash_table
+        self._visited_max_states[key][depth] = (best_value, best_action)
         return best_value, best_action
 
     def min_value(self, game: 'Game', depth: int, alpha: float, beta: float) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
@@ -276,6 +348,16 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             The evaluation function value of the best move to play
             for Min and the move itsef are returned.
         """
+        # get hashable state
+        key = game.get_hashable_state(self._player_id)
+
+        # check if this max_value is already in hash table
+        if key in self._visited_min_states and depth in self._visited_min_states[key].keys():
+            self._hit += 1
+            return self._visited_min_states[key][depth]
+        else:
+            self._visited_min_states[key] = defaultdict(lambda: (0, 0))
+
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
             # return its heuristic value and no move
@@ -304,8 +386,14 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
                 beta = min(beta, best_value)
             # if the value for the best Max ancestor cannot be improved
             if best_value <= alpha:
+                # save min_value in hash_table
+                self._visited_min_states[key][depth] = (best_value, best_action)
                 # terminate the search
                 return best_value, best_action
+
+        # save min_value in hash_table
+        self._visited_min_states[key][depth] = (best_value, best_action)
+
         return best_value, best_action
 
     def make_move(self, game: 'Game') -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
