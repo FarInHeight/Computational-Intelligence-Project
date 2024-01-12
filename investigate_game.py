@@ -59,12 +59,12 @@ class InvestigateGame(Game):
         '''
         return (self._board == other._board).all()
 
-    def get_hashable_state(self, player_id: int) -> int:
+    def get_hashable_state(self) -> int:
         '''
         Get a unique representation of a state that can be used as a key for a dictionary.
 
         Args:
-           player_id: the player's id.
+           None.
 
         Returns:
             An integer representation of the state is returned
@@ -74,7 +74,7 @@ class InvestigateGame(Game):
         # change not taken tiles values to 0
         state._board += 1
         # map the trasformed_state to an integer in base 3
-        return int(''.join(str(_) for _ in state._board.flatten()) + str(player_id), base=3)
+        return int(''.join(str(_) for _ in state._board.flatten()), base=3)
 
     def generate_possible_transitions(
         self, player_id: int

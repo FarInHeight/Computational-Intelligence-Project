@@ -108,13 +108,18 @@ class QLearningRLPlayer(Player):
             game: a game instance;
             player_id: my player's id.
         """
+        # if I'm playing as second
+        if player_id == 1:
+            # trasform the state into a canonical form
+            game = deepcopy(game)
+            tmp = game._board[game._board == 0]
+            game._board[game._board == 1] = 0
+            game._board[tmp] = 1
         # take trasformed states
         trasformed_states = Symmetry.get_transformed_states(game)
 
         # list of mapped states to a string in base 3
-        trasformed_states_repr_index = [
-            trasformed_state.get_hashable_state(player_id) for trasformed_state in trasformed_states
-        ]
+        trasformed_states_repr_index = [trasformed_state.get_hashable_state() for trasformed_state in trasformed_states]
 
         # trasformation index
         trasformation_index = np.argmin(trasformed_states_repr_index)
@@ -168,7 +173,7 @@ class QLearningRLPlayer(Player):
         """
 
         # get all possible transitions
-        transitions = game.generate_possible_transitions(player_id)
+        transitions = game.generate_possible_transitions(0)
 
         # randomly perform exploration
         if random() < self._exploration_rate:
@@ -205,7 +210,7 @@ class QLearningRLPlayer(Player):
         # get the current state representation
         game, state_repr_index, trasformation_index = self._map_state_to_index(game, player_id)
         # get all possible transitions
-        canonical_actions, _ = zip(*game.generate_possible_transitions(player_id))
+        canonical_actions, _ = zip(*game.generate_possible_transitions(0))
         # if the current state is known
         if state_repr_index in self._q_table:
             # take the action with maximum return of rewards
