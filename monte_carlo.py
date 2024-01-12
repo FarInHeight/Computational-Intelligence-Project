@@ -47,7 +47,6 @@ class MonteCarloRLPlayer(Player):
         """
         super().__init__()
         self._q_table = {}  # define the Action-value function
-        self._q_counters = {}  # define counters for the return of rewards
         self._n_episodes = n_episodes  # define the number of episodes for the training phase
         self._gamma = gamma  # define the discount rate of the Bellman equation
         self._exploration_rate = 1  # define the exploration rate for the training phase
@@ -136,17 +135,19 @@ class MonteCarloRLPlayer(Player):
             None.
         """
         # if the current state is unknown
-        if state_repr_index not in self._q_counters:
+        if state_repr_index not in self._q_table:
             # create its entry in the action-value mapping table
-            self._q_table[state_repr_index] = defaultdict(float)
+            self._q_table[state_repr_index] = {}
+            self._q_table[state_repr_index]['value'] = defaultdict(float)
             # create its entry in the counters of the return of rewards
-            self._q_counters[state_repr_index] = defaultdict(float)
+            self._q_table[state_repr_index]['counter'] = defaultdict(float)
         # update the counters of the return of rewards
-        self._q_counters[state_repr_index][action] += 1
+        self._q_table[state_repr_index]['counter'][action] += 1
         # update the action-value mapping table
-        self._q_table[state_repr_index][action] = (
-            self._q_table[state_repr_index][action]
-            + (return_of_rewards - self._q_table[state_repr_index][action]) / self._q_counters[state_repr_index][action]
+        self._q_table[state_repr_index]['value'][action] = (
+            self._q_table[state_repr_index]['value'][action]
+            + (return_of_rewards - self._q_table[state_repr_index]['value'][action])
+            / self._q_table[state_repr_index]['counter'][action]
         )
 
     def _step_training(
@@ -176,12 +177,15 @@ class MonteCarloRLPlayer(Player):
             # if the current state is unknown
             if state_repr_index not in self._q_table:
                 # create its entry in the action-value mapping table
-                self._q_table[state_repr_index] = defaultdict(float)
+                self._q_table[state_repr_index] = {}
+                self._q_table[state_repr_index]['value'] = defaultdict(float)
+                # create its entry in the counters of the return of rewards
+                self._q_table[state_repr_index]['counter'] = defaultdict(float)
                 # choose a random transition
                 transition = choice(transitions)
             else:
                 # take the action with maximum return of rewards
-                transition = max(transitions, key=lambda t: self._q_table[state_repr_index][t[0]])
+                transition = max(transitions, key=lambda t: self._q_table[state_repr_index]['value'][t[0]])
 
         return transition
 
@@ -206,7 +210,7 @@ class MonteCarloRLPlayer(Player):
         # if the current state is known
         if state_repr_index in self._q_table:
             # take the action with maximum return of rewards
-            canonical_action = max(canonical_actions, key=lambda a: self._q_table[state_repr_index][a])
+            canonical_action = max(canonical_actions, key=lambda a: self._q_table[state_repr_index]['value'][a])
         else:
             # choose a random action
             canonical_action = choice(canonical_actions)

@@ -151,8 +151,6 @@ class QLearningRLPlayer(Player):
         self._q_table[state_repr_index][action] = (1 - self._alpha) * prev_value + self._alpha * (
             reward + self._gamma * (-max(self._q_table[new_state_repr_index].values(), default=0.0))
         )
-        if max(self._q_table[new_state_repr_index].values(), default=0.0) != 0:
-            print('update!')
 
     def _step_training(
         self, game: 'InvestigateGame', state_repr_index: str, player_id: int
