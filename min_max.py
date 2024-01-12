@@ -135,6 +135,8 @@ class MinMaxPlayer(Player):
 
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
+            # get terminal value
+            value = self.evaluation_function(game)
             # save max_value in hash_table
             self._visited_max_states[key][0] = value
             # return its heuristic value
@@ -181,10 +183,12 @@ class MinMaxPlayer(Player):
 
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
+            # get terminal value
+            value = self.evaluation_function(game)
             # save min_value in hash_table
             self._visited_min_states[key][0] = value
             # return its heuristic value
-            return self.evaluation_function(game)
+            return value
         # set the current best min value
         value = float('inf')
         # get all possible game transitions or canonical transitions
