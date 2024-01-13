@@ -100,21 +100,13 @@ class QLearningRLPlayer(Player):
         # give a big negative reward, otherwise
         return -10
 
-    def _map_state_to_index(self, game: 'Game', player_id: int) -> tuple['InvestigationGame', str, int]:
+    def _map_state_to_index(self, game: 'Game') -> tuple['InvestigateGame', str, int]:
         """
         Given a game state, this function translates it into an index to access the Q_table.
 
         Args:
-            game: a game instance;
-            player_id: my player's id.
+            game: a game instance.
         """
-        # if I'm playing as second
-        if player_id == 1:
-            # trasform the state into a canonical form
-            game = deepcopy(game)
-            tmp = game._board[game._board == 0]
-            game._board[game._board == 1] = 0
-            game._board[tmp] = 1
         # take trasformed states
         trasformed_states = Symmetry.get_transformed_states(game)
 
@@ -158,15 +150,14 @@ class QLearningRLPlayer(Player):
         )
 
     def _step_training(
-        self, game: 'InvestigateGame', state_repr_index: str, player_id: int
+        self, game: 'InvestigateGame', state_repr_index: str
     ) -> tuple[tuple[tuple[int, int], Move], 'InvestigateGame']:
         """
         Construct a move during the training phase to update the Q_table.
 
         Args:
             game: a game instance;
-            state_repr_index: hashable key for the state;
-            player_id: my player's id.
+            state_repr_index: hashable key for the state.
 
         Returns:
             A move to play is returned.
@@ -283,20 +274,24 @@ class QLearningRLPlayer(Player):
 
                 # if it is our turn
                 if self == player:
+                    # if I'm playing as second
+                    if player_idx == 1:
+                        # trasform the state into a canonical form
+                        canonical_game = Symmetry.swap_board_players(canonical_game)
                     # get the current state representation
-                    canonical_game, canonical_state_repr_index, _ = self._map_state_to_index(canonical_game, player_idx)
+                    canonical_game, canonical_state_repr_index, _ = self._map_state_to_index(canonical_game)
                     # get an action
-                    canonical_action, canonical_game = self._step_training(
-                        canonical_game, canonical_state_repr_index, player_idx
-                    )
+                    canonical_action, canonical_game = self._step_training(canonical_game, canonical_state_repr_index)
                     # get the next state representation
-                    canonical_game, new_canonical_state_repr_index, _ = self._map_state_to_index(
-                        canonical_game, (player_idx + 1) % 2
-                    )
+                    canonical_game, new_canonical_state_repr_index, _ = self._map_state_to_index(canonical_game)
                     # update the action-value function
                     self._update_q_table(
                         canonical_state_repr_index, new_canonical_state_repr_index, canonical_action, reward=0
                     )
+                    # if I'm playing as second
+                    if player_idx == 1:
+                        # trasform the state into a canonical form
+                        canonical_game = Symmetry.swap_board_players(canonical_game)
 
                     # if we play the same action as before
                     if last_action == canonical_action:

@@ -97,7 +97,7 @@ class MonteCarloRLPlayer(Player):
         # give a big negative reward, otherwise
         return -10
 
-    def _map_state_to_index(self, game: 'InvestigateGame') -> tuple['InvestigationGame', str, int]:
+    def _map_state_to_index(self, game: 'InvestigateGame') -> tuple['InvestigateGame', str, int]:
         """
         Given a game state, this function translates it into an index to access the Q_table.
 
