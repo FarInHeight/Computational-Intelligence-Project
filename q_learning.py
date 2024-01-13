@@ -198,8 +198,12 @@ class QLearningRLPlayer(Player):
         game = InvestigateGame(game)
         # get my id
         player_id = game.get_current_player()
+        # if I'm playing as second
+        if player_id == 1:
+            # trasform the state into a canonical form
+            game = Symmetry.swap_board_players(game)
         # get the current state representation
-        game, state_repr_index, trasformation_index = self._map_state_to_index(game, player_id)
+        game, state_repr_index, trasformation_index = self._map_state_to_index(game)
         # get all possible transitions
         canonical_actions, _ = zip(*game.generate_possible_transitions(0))
         # if the current state is known
