@@ -169,7 +169,7 @@ class Symmetry:
         """
         # trasform the game by swapping the players
         game = deepcopy(game)
-        tmp = game._board[game._board == 0]
+        tmp = game._board == 0
         game._board[game._board == 1] = 0
         game._board[tmp] = 1
 
