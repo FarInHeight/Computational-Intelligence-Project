@@ -1,4 +1,5 @@
 from game import Move
+from game import Game
 import numpy as np
 from copy import deepcopy
 
@@ -88,7 +89,7 @@ class Symmetry:
     }
 
     @classmethod
-    def get_transformed_states(cls, game) -> list['InvestigateGame']:
+    def get_transformed_states(cls, game: 'Game') -> list['Game']:
         '''
         Apply all possible transformations to the state and return a list of equivalent transformed states.
         To compute all equivalent states, apply:
@@ -101,7 +102,7 @@ class Symmetry:
         - a 270° rotation to the flipped state.
 
         Args:
-            None.
+            game: a game instance.
 
         Returns:
             A list of equivalent transformed states is returned.
@@ -132,12 +133,14 @@ class Symmetry:
         return transformed_states
 
     @classmethod
-    def get_action_from_canonical_action(cls, action: tuple[tuple[int, int], Move], transformation_index: int) -> tuple[tuple[int, int], Move]:
+    def get_action_from_canonical_action(
+        cls, action: tuple[tuple[int, int], Move], transformation_index: int
+    ) -> tuple[tuple[int, int], Move]:
         '''
         Gives the corresponding action for a state compared to the canonical state.
 
         Args:
-            action: the canonical action,
+            action: the canonical action;
             transformation_index: the corrisponding index of the trasformation applied.
 
         Returns:
@@ -152,3 +155,22 @@ class Symmetry:
             tuple(Symmetry.trasformed_positions[transformation_index][(from_pos[1], from_pos[0])]),
             Symmetry.map_canonical_slide_to_original_slide[transformation_index][slide],
         )
+
+    @classmethod
+    def swap_board_players(cls, game: 'Game') -> 'Game':
+        """
+        Trasform the game by swapping the players.
+
+        Args:
+            game: a game instance.
+
+        Returns:
+            A game with the players swapped is returned.
+        """
+        # trasform the game by swapping the players
+        game = deepcopy(game)
+        tmp = game._board[game._board == 0]
+        game._board[game._board == 1] = 0
+        game._board[tmp] = 1
+
+        return game

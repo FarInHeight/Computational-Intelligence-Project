@@ -97,21 +97,13 @@ class MonteCarloRLPlayer(Player):
         # give a big negative reward, otherwise
         return -10
 
-    def _map_state_to_index(self, game: 'InvestigateGame', player_id: int) -> tuple['InvestigationGame', str, int]:
+    def _map_state_to_index(self, game: 'InvestigateGame') -> tuple['InvestigationGame', str, int]:
         """
         Given a game state, this function translates it into an index to access the Q_table.
 
         Args:
-            game: a game instance;
-            player_id: my player's id.
+            game: a game instance.
         """
-        # if I'm playing as second
-        if player_id == 1:
-            # trasform the state into a canonical form
-            game = deepcopy(game)
-            tmp = game._board[game._board == 0]
-            game._board[game._board == 1] = 0
-            game._board[tmp] = 1
         # take trasformed states
         trasformed_states = Symmetry.get_transformed_states(game)
 
@@ -156,15 +148,14 @@ class MonteCarloRLPlayer(Player):
         )
 
     def _step_training(
-        self, game: 'InvestigateGame', state_repr_index: str, player_id: int
+        self, game: 'InvestigateGame', state_repr_index: str
     ) -> tuple[tuple[tuple[int, int], Move], 'InvestigateGame']:
         """
         Construct a move during the training phase to update the Q_table.
 
         Args:
             game: a game instance;
-            state_repr_index: hashable key for the state;
-            player_id: my player's id.
+            state_repr_index: hashable key for the state.
 
         Returns:
             A move to play is returned.
@@ -208,8 +199,12 @@ class MonteCarloRLPlayer(Player):
         game = InvestigateGame(game)
         # get my id
         player_id = game.get_current_player()
+        # if I'm playing as second
+        if player_id == 1:
+            # trasform the state into a canonical form
+            game = Symmetry.swap_board_players(game)
         # get the current state representation
-        game, state_repr_index, trasformation_index = self._map_state_to_index(game, player_id)
+        game, state_repr_index, trasformation_index = self._map_state_to_index(game)
         # get all possible transitions
         canonical_actions, _ = zip(*game.generate_possible_transitions(0))
         # if the current state is known
@@ -285,13 +280,18 @@ class MonteCarloRLPlayer(Player):
 
                 # if it is our turn
                 if self == player:
+                    # if I'm playing as second
+                    if player_idx == 1:
+                        # perform a swap to continue the game as usual
+                        canonical_game = Symmetry.swap_board_players(canonical_game)
                     # get the current state representation
-                    canonical_game, canonical_state_repr_index, _ = self._map_state_to_index(canonical_game, player_idx)
+                    canonical_game, canonical_state_repr_index, _ = self._map_state_to_index(canonical_game)
                     # get an action
-                    canonical_action, canonical_game = self._step_training(
-                        canonical_game, canonical_state_repr_index, player_idx
-                    )
-
+                    canonical_action, canonical_game = self._step_training(canonical_game, canonical_state_repr_index)
+                    # if I'm playing as second
+                    if player_idx == 1:
+                        # perform a swap to continue the game as usual
+                        canonical_game = Symmetry.swap_board_players(canonical_game)
                     # update the trajectory
                     trajectory.append((canonical_state_repr_index, canonical_action, 0))
 
