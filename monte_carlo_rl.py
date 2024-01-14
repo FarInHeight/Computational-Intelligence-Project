@@ -13,19 +13,20 @@ from symmetry import Symmetry
 from copy import deepcopy
 
 
-class MonteCarloQLPlayer(Player):
+class MonteCarloRLPlayer(Player):
     """
     Class representing player who learns to play thanks to the Monte Carlo-learning technique.
     """
 
     def __init__(
         self,
-        n_episodes: int = 500_000,
-        gamma: float = 0.99,
+        n_episodes: int = 200_000,
+        gamma: float = 0.95,
+        alpha: float = 0.1,
         min_exploration_rate: float = 0.01,
-        exploration_decay_rate: float = 1e-5,
+        exploration_decay_rate: float = 3e-5,
         minmax: bool = False,
-        switch_ratio: int = 0.8,
+        switch_ratio: int = 0.9,
         depth: int = 1,
         symmetries: bool = False,
     ) -> None:
@@ -46,9 +47,10 @@ class MonteCarloQLPlayer(Player):
             None.
         """
         super().__init__()
-        self._q_table = {}  # define the Action-value function
+        self._state_values = defaultdict(float)  # define the State-value function
         self._n_episodes = n_episodes  # define the number of episodes for the training phase
         self._gamma = gamma  # define the discount rate of the Bellman equation
+        self._alpha = alpha  # define how much information to incorporate from the new experience
         self._exploration_rate = 1  # define the exploration rate for the training phase
         self._min_exploration_rate = (
             min_exploration_rate  # define the minimum rate for exploration during the training phase
@@ -97,17 +99,15 @@ class MonteCarloQLPlayer(Player):
         # give a big negative reward, otherwise
         return -10
 
-    def _map_state_to_index(
-        self,
-        game: 'InvestigateGame',
-        player_id: int,
-    ) -> tuple['InvestigateGame', str, int]:
+    def _map_state_to_index(self, game: 'Game', player_id: int) -> tuple['InvestigationGame', str, int]:
         """
         Given a game state, this function translates it into an index to access the Q_table.
 
         Args:
-            game: a game instance.
+            game: a game instance;
+            player_id: my player's id.
         """
+
         # take trasformed states
         trasformed_states = Symmetry.get_transformed_states(game)
 
@@ -125,7 +125,7 @@ class MonteCarloQLPlayer(Player):
             trasformation_index,
         )
 
-    def _update_q_table(self, state_repr_index: str, action: int, return_of_rewards: float) -> None:
+    def _update_state_values(self, state_repr_index: str, return_of_rewards: float) -> None:
         """
         Update the Q_table according to the Monte Carlo-learning technique.
 
@@ -137,26 +137,14 @@ class MonteCarloQLPlayer(Player):
         Returns:
             None.
         """
-        # if the current state is unknown
-        if state_repr_index not in self._q_table:
-            # create its entry in the action-value mapping table
-            self._q_table[state_repr_index] = {}
-            self._q_table[state_repr_index]['value'] = defaultdict(float)
-            # create its entry in the counters of the return of rewards
-            self._q_table[state_repr_index]['counter'] = defaultdict(float)
-        # update the counters of the return of rewards
-        self._q_table[state_repr_index]['counter'][action] += 1
-        # update the action-value mapping table
-        self._q_table[state_repr_index]['value'][action] = (
-            self._q_table[state_repr_index]['value'][action]
-            + (return_of_rewards - self._q_table[state_repr_index]['value'][action])
-            / self._q_table[state_repr_index]['counter'][action]
+        # update the state-value mapping table
+        self._state_values[state_repr_index] = self._state_values[state_repr_index] + self._alpha * (
+            return_of_rewards - self._state_values[state_repr_index]
         )
 
     def _step_training(
         self,
         game: 'InvestigateGame',
-        state_repr_index: str,
         player_id: int,
     ) -> tuple[tuple[tuple[int, int], Move], 'InvestigateGame']:
         """
@@ -164,7 +152,7 @@ class MonteCarloQLPlayer(Player):
 
         Args:
             game: a game instance;
-            state_repr_index: hashable key for the state.
+            player_id: my player's id.
 
         Returns:
             A move to play is returned.
@@ -174,23 +162,15 @@ class MonteCarloQLPlayer(Player):
         transitions = game.generate_possible_transitions(player_id)
 
         # randomly perform exploration
-        if random() < self._exploration_rate:
+        if random() < self._exploration_rate or all(
+            [t[1].get_hashable_state(player_id) not in self._state_values for t in transitions]
+        ):
             # choose a random transition
             transition = choice(transitions)
         # perform eploitation, otherwise
         else:
-            # if the current state is unknown
-            if state_repr_index not in self._q_table:
-                # create its entry in the action-value mapping table
-                self._q_table[state_repr_index] = {}
-                self._q_table[state_repr_index]['value'] = defaultdict(float)
-                # create its entry in the counters of the return of rewards
-                self._q_table[state_repr_index]['counter'] = defaultdict(float)
-                # choose a random transition
-                transition = choice(transitions)
-            else:
-                # take the action with maximum return of rewards
-                transition = max(transitions, key=lambda t: self._q_table[state_repr_index]['value'][t[0]])
+            # take the action with min return of rewards of the oppenent
+            transition = max(transitions, key=lambda t: self._state_values[t[1].get_hashable_state(player_id)])
 
         return transition
 
@@ -209,16 +189,16 @@ class MonteCarloQLPlayer(Player):
         # get my id
         player_id = game.get_current_player()
         # get the current state representation
-        game, state_repr_index, trasformation_index = self._map_state_to_index(game)
+        game, _, trasformation_index = self._map_state_to_index(game, player_id)
         # get all possible transitions
-        canonical_actions, _ = zip(*game.generate_possible_transitions(player_id))
-        # if the current state is known
-        if state_repr_index in self._q_table:
-            # take the action with maximum return of rewards
-            canonical_action = max(canonical_actions, key=lambda a: self._q_table[state_repr_index]['value'][a])
+        transitions = game.generate_possible_transitions(player_id)
+        # if one of the following states is known
+        if any([t[1].get_hashable_state(player_id) in self._state_values for t in transitions]):
+            # take the action with min return of rewards of the oppenent
+            canonical_action, _ = max(transitions, key=lambda t: self._state_values[t[1].get_hashable_state(player_id)])
         else:
             # choose a random action
-            canonical_action = choice(canonical_actions)
+            canonical_action, _ = choice(transitions)
 
         # get action for original state by mapping
         action = Symmetry.get_action_from_canonical_action(canonical_action, trasformation_index)
@@ -285,29 +265,22 @@ class MonteCarloQLPlayer(Player):
 
                 # if it is our turn
                 if self == player:
-                    # if I'm playing as second
-                    if player_idx == 1:
-                        # perform a swap to continue the game as usual
-                        canonical_game = Symmetry.swap_board_players(canonical_game)
-                    # get the current state representation
-                    canonical_game, canonical_state_repr_index, _ = self._map_state_to_index(canonical_game)
                     # get an action
-                    canonical_action, canonical_game = self._step_training(canonical_game, canonical_state_repr_index)
-                    # if I'm playing as second
-                    if player_idx == 1:
-                        # perform a swap to continue the game as usual
-                        canonical_game = Symmetry.swap_board_players(canonical_game)
+                    action, canonical_game = self._step_training(canonical_game, player_idx)
+                    # get the next state representation
+                    canonical_game, canonical_state_repr_index, _ = self._map_state_to_index(canonical_game, player_idx)
+
                     # update the trajectory
-                    trajectory.append((canonical_state_repr_index, canonical_action, 0))
+                    trajectory.append((canonical_state_repr_index, 0))
 
                     # if we play the same action as before
-                    if last_action == canonical_action:
+                    if last_action == action:
                         # increment the counter
                         counter += 1
                     # otherwise
                     else:
                         # save the new last action
-                        last_action = canonical_action
+                        last_action = action
                         # reset the counter
                         counter = 0
 
@@ -335,7 +308,7 @@ class MonteCarloQLPlayer(Player):
             # get the game reward
             reward = self._game_reward(player, winner)
             # update the trajectory
-            trajectory.append((canonical_state_repr_index, canonical_action, reward))
+            trajectory.append((canonical_state_repr_index, reward))
 
             # update the rewards history
             self._rewards.append(reward)
@@ -343,14 +316,14 @@ class MonteCarloQLPlayer(Player):
             # set the current return of rewards
             return_of_rewards = 0
             # for all tuples in trajectory
-            for state_repr_index, action, reward in trajectory[::-1]:
+            for state_repr_index, reward in trajectory[::-1]:
                 # update the return of rewards
                 return_of_rewards = reward + self._gamma * return_of_rewards
                 # update the action-value function
-                self._update_q_table(state_repr_index, action, return_of_rewards)
+                self._update_state_values(state_repr_index, return_of_rewards)
 
             pbar_episodes.set_description(
-                f"# explored states: {len(self._q_table):,} - Current exploration rate: {self._exploration_rate:2f}"
+                f"# current mean rewards: {sum(self._rewards) / (episode+1):.2f} - # explored states: {len(self._state_values):,} - Current exploration rate: {self._exploration_rate:2f}"
             )
 
         print(f'** Last 1_000 episodes - Mean rewards value: {sum(self._rewards[-1_000:]) / 1_000:.2f} **')
@@ -385,20 +358,8 @@ class MonteCarloQLPlayer(Player):
 
 if __name__ == '__main__':
     # create the Q-learning player
-    monte_carlo_rl_agent = MonteCarloRLPlayer(
-        n_episodes=1_000,
-        gamma=0.99,
-        min_exploration_rate=0.01,
-        exploration_decay_rate=1e-4,
-        minmax=True,
-    )
+    monte_carlo_rl_agent = MonteCarloRLPlayer(n_episodes=500_000, exploration_decay_rate=1e-5)
     # train the Q-learning player
     monte_carlo_rl_agent.train(max_steps_draw=10)
-    # get the rewards
-    rewards = monte_carlo_rl_agent.rewards
-    # print flash statistics
-    print(rewards.count(-10), rewards.count(10), rewards.count(-1))
-    # print the number of explored states
-    print(f'Number of explored states: {len(monte_carlo_rl_agent._q_table.keys())}')
     # serialize the Q-learning player
-    monte_carlo_rl_agent.save('agents/monte_carlo_rl_agent.pkl')
+    monte_carlo_rl_agent.save('agents/monte_carlo_rl_agent_4.pkl')

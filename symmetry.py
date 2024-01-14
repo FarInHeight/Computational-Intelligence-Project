@@ -156,6 +156,7 @@ class Symmetry:
             Symmetry.map_canonical_slide_to_original_slide[transformation_index][slide],
         )
 
+    '''
     @classmethod
     def swap_board_players(cls, game: 'Game') -> 'Game':
         """
@@ -174,3 +175,4 @@ class Symmetry:
         game._board[tmp] = 1
 
         return game
+    '''

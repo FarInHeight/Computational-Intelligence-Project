@@ -100,18 +100,21 @@ class QLearningRLPlayer(Player):
         # give a big negative reward, otherwise
         return -10
 
-    def _map_state_to_index(self, game: 'Game') -> tuple['InvestigateGame', str, int]:
+    def _map_state_to_index(self, game: 'Game', player_id: int) -> tuple['InvestigateGame', str, int]:
         """
         Given a game state, this function translates it into an index to access the Q_table.
 
         Args:
-            game: a game instance.
+            game: a game instance;
+            player_id: my player's id.
         """
         # take trasformed states
         trasformed_states = Symmetry.get_transformed_states(game)
 
         # list of mapped states to a string in base 3
-        trasformed_states_repr_index = [trasformed_state.get_hashable_state() for trasformed_state in trasformed_states]
+        trasformed_states_repr_index = [
+            trasformed_state.get_hashable_state(player_id) for trasformed_state in trasformed_states
+        ]
 
         # trasformation index
         trasformation_index = np.argmin(trasformed_states_repr_index)
@@ -150,21 +153,25 @@ class QLearningRLPlayer(Player):
         )
 
     def _step_training(
-        self, game: 'InvestigateGame', state_repr_index: str
+        self,
+        game: 'InvestigateGame',
+        state_repr_index: str,
+        player_id: int,
     ) -> tuple[tuple[tuple[int, int], Move], 'InvestigateGame']:
         """
         Construct a move during the training phase to update the Q_table.
 
         Args:
             game: a game instance;
-            state_repr_index: hashable key for the state.
+            state_repr_index: hashable key for the state;
+            player_id: my player's id.
 
         Returns:
             A move to play is returned.
         """
 
         # get all possible transitions
-        transitions = game.generate_possible_transitions(0)
+        transitions = game.generate_possible_transitions(player_id)
 
         # randomly perform exploration
         if random() < self._exploration_rate:
@@ -198,14 +205,10 @@ class QLearningRLPlayer(Player):
         game = InvestigateGame(game)
         # get my id
         player_id = game.get_current_player()
-        # if I'm playing as second
-        if player_id == 1:
-            # trasform the state into a canonical form
-            game = Symmetry.swap_board_players(game)
         # get the current state representation
         game, state_repr_index, trasformation_index = self._map_state_to_index(game)
         # get all possible transitions
-        canonical_actions, _ = zip(*game.generate_possible_transitions(0))
+        canonical_actions, _ = zip(*game.generate_possible_transitions(player_id))
         # if the current state is known
         if state_repr_index in self._q_table:
             # take the action with maximum return of rewards
@@ -278,24 +281,18 @@ class QLearningRLPlayer(Player):
 
                 # if it is our turn
                 if self == player:
-                    # if I'm playing as second
-                    if player_idx == 1:
-                        # trasform the state into a canonical form
-                        canonical_game = Symmetry.swap_board_players(canonical_game)
                     # get the current state representation
-                    canonical_game, canonical_state_repr_index, _ = self._map_state_to_index(canonical_game)
+                    canonical_game, canonical_state_repr_index, _ = self._map_state_to_index(canonical_game, player_idx)
                     # get an action
                     canonical_action, canonical_game = self._step_training(canonical_game, canonical_state_repr_index)
                     # get the next state representation
-                    canonical_game, new_canonical_state_repr_index, _ = self._map_state_to_index(canonical_game)
+                    canonical_game, new_canonical_state_repr_index, _ = self._map_state_to_index(
+                        canonical_game, player_idx
+                    )
                     # update the action-value function
                     self._update_q_table(
                         canonical_state_repr_index, new_canonical_state_repr_index, canonical_action, reward=0
                     )
-                    # if I'm playing as second
-                    if player_idx == 1:
-                        # trasform the state into a canonical form
-                        canonical_game = Symmetry.swap_board_players(canonical_game)
 
                     # if we play the same action as before
                     if last_action == canonical_action:
