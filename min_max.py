@@ -280,18 +280,6 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         """
         super().__init__(player_id, depth, symmetries)
 
-    def __default_value(self) -> tuple[0, None]:
-        """
-        Implement a default factoty method for defaultdic.
-
-        Args:
-            None.
-
-        Returns:
-            A default value is returned.
-        """
-        return (0, None)
-
     def max_value(
         self, game: 'Game', depth: int, alpha: float, beta: float
     ) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
@@ -316,9 +304,9 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         key = game.get_hashable_state(self._player_id)
 
         # check if this max_value is already in hash table
-        if key in self._visited_max_states and depth <= self._visited_max_states[key].value:
+        if key in self._visited_max_states and depth <= self._visited_max_states[key].depth:
             self._hit += 1
-            return self._visited_max_states[key].value
+            return self._visited_max_states[key].value, self._visited_max_states[key].action
 
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
@@ -385,9 +373,9 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         key = game.get_hashable_state(self._player_id)
 
         # check if this max_value is already in hash table
-        if key in self._visited_min_states and depth <= self._visited_min_states[key].value:
+        if key in self._visited_min_states and depth <= self._visited_min_states[key].depth:
             self._hit += 1
-            return self._visited_min_states[key].value
+            return self._visited_min_states[key].value, self._visited_min_states[key].action
 
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
