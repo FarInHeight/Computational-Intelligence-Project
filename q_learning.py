@@ -107,6 +107,10 @@ class QLearningRLPlayer(Player):
         Args:
             game: a game instance;
             player_id: my player's id.
+
+        Returns:
+            The corresponding canonical game, its representation and index in the list
+            returned by 'Symmetry.get_transformed_states(game)' are returned.
         """
         # take trasformed states
         trasformed_states = Symmetry.get_transformed_states(game)

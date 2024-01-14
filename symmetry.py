@@ -22,50 +22,23 @@ class Symmetry:
 
     rotations = [lambda x: np.rot90(x, k=1), lambda x: np.rot90(x, k=2), lambda x: np.rot90(x, k=3)]
     flips = [lambda x: deepcopy(x), lambda x: np.flipud(x)]
-    # mapping of canonical slide to original slide
-    map_canonical_slide_to_original_slide = {
-        1: {
-            Move.BOTTOM: Move.LEFT,
-            Move.LEFT: Move.TOP,
-            Move.RIGHT: Move.BOTTOM,
-            Move.TOP: Move.RIGHT,
-        },
-        2: {
-            Move.LEFT: Move.RIGHT,
-            Move.RIGHT: Move.LEFT,
-            Move.BOTTOM: Move.TOP,
-            Move.TOP: Move.BOTTOM,
-        },
-        3: {
-            Move.LEFT: Move.BOTTOM,
-            Move.RIGHT: Move.TOP,
-            Move.BOTTOM: Move.RIGHT,
-            Move.TOP: Move.LEFT,
-        },
-        4: {
-            Move.LEFT: Move.LEFT,
-            Move.RIGHT: Move.RIGHT,
-            Move.BOTTOM: Move.TOP,
-            Move.TOP: Move.BOTTOM,
-        },
-        5: {
-            Move.LEFT: Move.BOTTOM,
-            Move.RIGHT: Move.TOP,
-            Move.BOTTOM: Move.LEFT,
-            Move.TOP: Move.RIGHT,
-        },
-        6: {
-            Move.LEFT: Move.RIGHT,
-            Move.RIGHT: Move.LEFT,
-            Move.BOTTOM: Move.BOTTOM,
-            Move.TOP: Move.TOP,
-        },
-        7: {
-            Move.BOTTOM: Move.RIGHT,
-            Move.LEFT: Move.TOP,
-            Move.RIGHT: Move.BOTTOM,
-            Move.TOP: Move.LEFT,
-        },
+    compass = np.array([['', Move.TOP, ''], [Move.LEFT, '', Move.RIGHT], ['', Move.BOTTOM, '']])
+    # canonical from slide
+    map_slide_to_compass = {
+        Move.TOP: (0, 1),
+        Move.LEFT: (1, 0),
+        Move.RIGHT: (1, 2),
+        Move.BOTTOM: (2, 1),
+    }
+    # mapping trasformation - trasformed from slide
+    trasformed_slides = {
+        1: np.rot90(compass, k=1),
+        2: np.rot90(compass, k=2),
+        3: np.rot90(compass, k=3),
+        4: np.flipud(compass),
+        5: np.rot90(np.flipud(compass), k=1),
+        6: np.rot90(np.flipud(compass), k=2),
+        7: np.rot90(np.flipud(compass), k=3),
     }
     # canonical from position
     canonical_positions = np.array(
@@ -153,7 +126,7 @@ class Symmetry:
 
         return (
             tuple(Symmetry.trasformed_positions[transformation_index][(from_pos[1], from_pos[0])]),
-            Symmetry.map_canonical_slide_to_original_slide[transformation_index][slide],
+            Symmetry.trasformed_slides[transformation_index][Symmetry.map_slide_to_compass[slide]],
         )
 
     '''

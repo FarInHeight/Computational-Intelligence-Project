@@ -106,7 +106,12 @@ class MonteCarloQLPlayer(Player):
         Given a game state, this function translates it into an index to access the Q_table.
 
         Args:
-            game: a game instance.
+            game: a game instance;
+            player_id: my player's id.
+
+        Returns:
+            The corresponding canonical game, its representation and index in the list
+            returned by 'Symmetry.get_transformed_states(game)' are returned.
         """
         # take trasformed states
         trasformed_states = Symmetry.get_transformed_states(game)
@@ -385,7 +390,7 @@ class MonteCarloQLPlayer(Player):
 
 if __name__ == '__main__':
     # create the Q-learning player
-    monte_carlo_rl_agent = MonteCarloRLPlayer(
+    monte_carlo_rl_agent = MonteCarloQLPlayer(
         n_episodes=1_000,
         gamma=0.99,
         min_exploration_rate=0.01,

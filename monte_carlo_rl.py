@@ -99,13 +99,17 @@ class MonteCarloRLPlayer(Player):
         # give a big negative reward, otherwise
         return -10
 
-    def _map_state_to_index(self, game: 'Game', player_id: int) -> tuple['InvestigationGame', str, int]:
+    def _map_state_to_index(self, game: 'Game', player_id: int) -> tuple['InvestigateGame', str, int]:
         """
         Given a game state, this function translates it into an index to access the Q_table.
 
         Args:
             game: a game instance;
             player_id: my player's id.
+
+        Returns:
+            The corresponding canonical game, its representation and index in the list
+            returned by 'Symmetry.get_transformed_states(game)' are returned.
         """
 
         # take trasformed states
