@@ -2,12 +2,10 @@ import numpy as np
 import time
 from game import Game, Move, Player
 from investigate_game import InvestigateGame
-from collections import defaultdict
 import pickle
 from collections import namedtuple
 
 EntryMinMax = namedtuple('EntryMinMax', ['depth', 'value'])
-EntryAlphaBetaMinMax = namedtuple('EntryMinMax', ['depth', 'value', 'action'])
 
 
 class MinMaxPlayer(Player):
@@ -227,9 +225,7 @@ class MinMaxPlayer(Player):
         # for all possible actions and result states
         actions, states = zip(*transitions)
         # return the action corresponding to the best estimated move
-        tuple_ = max(enumerate(actions), key=lambda t: self.min_value(states[t[0]], self._depth - 1))
-        # extract the action
-        _, action = tuple_
+        _, action = max(enumerate(actions), key=lambda t: self.min_value(states[t[0]], self._depth - 1))
         # return it
         return action
 
@@ -306,21 +302,19 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         # check if this max_value is already in hash table
         if key in self._visited_max_states and depth <= self._visited_max_states[key].depth:
             self._hit += 1
-            return self._visited_max_states[key].value, self._visited_max_states[key].action
+            return self._visited_max_states[key].value
 
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
             # get terminal value
             value = self.evaluation_function(game)
             # save min_value in hash_table
-            self._visited_max_states[key] = EntryAlphaBetaMinMax(0, value, None)
+            self._visited_max_states[key] = EntryMinMax(0, value)
             # return its heuristic value and no move
-            return value, None
+            return value
 
         # set the current best max value
         best_value = float('-inf')
-        # set the current best move
-        best_action = None
         # get all possible game transitions or canonical transitions
         transitions = (
             game.generate_canonical_transitions(self._player_id)
@@ -328,27 +322,25 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             else game.generate_possible_transitions(self._player_id)
         )
         # for each possible game transitions
-        for action, state in transitions:
+        for _, state in transitions:
             # play as Min
-            value, _ = self.min_value(state, depth - 1, alpha, beta)
+            value = self.min_value(state, depth - 1, alpha, beta)
             # if we find a better value
             if value > best_value:
                 # update the current max value
                 best_value = value
-                # update the current best move
-                best_action = action
                 # update the maximum Max value so far
                 alpha = max(alpha, best_value)
             # if the value for the best Min ancestor cannot be improved
             if best_value >= beta:
                 # save min_value in hash_table
-                self._visited_max_states[key] = EntryAlphaBetaMinMax(depth, best_value, best_action)
+                self._visited_max_states[key] = EntryMinMax(depth, best_value)
                 # terminate the search
-                return best_value, best_action
+                return best_value
 
         # save max_value in hash_table
-        self._visited_max_states[key] = EntryAlphaBetaMinMax(depth, best_value, best_action)
-        return best_value, best_action
+        self._visited_max_states[key] = EntryMinMax(depth, best_value)
+        return best_value
 
     def min_value(
         self, game: 'Game', depth: int, alpha: float, beta: float
@@ -375,21 +367,19 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         # check if this max_value is already in hash table
         if key in self._visited_min_states and depth <= self._visited_min_states[key].depth:
             self._hit += 1
-            return self._visited_min_states[key].value, self._visited_min_states[key].action
+            return self._visited_min_states[key].value
 
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
             # get terminal value
             value = self.evaluation_function(game)
             # save min_value in hash_table
-            self._visited_min_states[key] = EntryAlphaBetaMinMax(0, value, None)
+            self._visited_min_states[key] = EntryMinMax(0, value)
             # return its heuristic value and no move
-            return value, None
+            return value
 
         # set the current best min value
         best_value = float('inf')
-        # set the current best move
-        best_action = None
         # get all possible game transitions or canonical transitions
         transitions = (
             game.generate_canonical_transitions(self._opponent_player_id)
@@ -397,27 +387,25 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             else game.generate_possible_transitions(self._opponent_player_id)
         )
         # for each possible game transitions
-        for action, state in transitions:
+        for _, state in transitions:
             # play as Max
-            value, _ = self.max_value(state, depth - 1, alpha, beta)
+            value = self.max_value(state, depth - 1, alpha, beta)
             # if we find a better value
             if value < best_value:
                 # update the current min value
                 best_value = value
-                # update the current best move
-                best_action = action
                 # update the minimum Min value so far
                 beta = min(beta, best_value)
             # if the value for the best Max ancestor cannot be improved
             if best_value <= alpha:
                 # save min_value in hash_table
-                self._visited_min_states[key] = EntryAlphaBetaMinMax(depth, best_value, best_action)
+                self._visited_min_states[key] = EntryMinMax(depth, best_value)
                 # terminate the search
-                return best_value, best_action
+                return best_value
 
         # save min_value in hash_table
-        self._visited_min_states[key] = EntryAlphaBetaMinMax(depth, best_value, best_action)
-        return best_value, best_action
+        self._visited_min_states[key] = EntryMinMax(depth, best_value)
+        return best_value
 
     def make_move(self, game: 'Game') -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
         """
@@ -431,23 +419,38 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         """
         # create seperate instance of a game for investigation
         game = InvestigateGame(game)
-        # get the best move to play
-        _, action = self.max_value(game, self._depth, float('-inf'), float('inf'))
+        # get all possible game transitions or canonical transitions
+        transitions = (
+            game.generate_canonical_transitions(self._player_id)
+            if self._symmetries
+            else game.generate_possible_transitions(self._player_id)
+        )
+        # for all possible actions and result states
+        actions, states = zip(*transitions)
+        # return the action corresponding to the best estimated move
+        _, action = max(
+            enumerate(actions), key=lambda t: self.min_value(states[t[0]], self._depth - 1, float('-inf'), float('inf'))
+        )
         # return it
         return action
 
 
 if __name__ == '__main__':
-    # test generate_canonical_transitions() execution time vs generate_possible_transitions()
-    game = Game()
-    start = time.time()
-    transictions = AlphaBetaMinMaxPlayer(1).InvestigateGame(game).generate_canonical_transitions(1)
-    print(len(transictions))
-    total_time = time.time() - start
-    print(f'Canonical: {total_time:.2E} sec, {total_time / 60:.2E} min')
+    from tqdm import trange
+    from random_player import RandomPlayer
 
-    start = time.time()
-    transictions = AlphaBetaMinMaxPlayer(1).InvestigateGame(game).generate_possible_transitions(1)
-    print(len(transictions))
-    total_time = time.time() - start
-    print(f'Non canonical: {total_time:.2E} sec, {total_time / 60:.2E} min')
+    def test(player1, player2, num_games, idx):
+        wins = 0
+        pbar = trange(num_games)
+        for game in pbar:
+            g = Game()
+            w = g.play(player1, player2)
+            if w == idx:
+                wins += 1
+            pbar.set_description(f'Current percentage of wins player {idx}: {wins/(game+1):%}')
+        print(f'Percentage of wins player {idx}: {wins/num_games:%}')
+
+    print(f'AlphaBetaMinMax as first')
+    test(AlphaBetaMinMaxPlayer(0, depth=2), RandomPlayer(), 1_00, 0)
+    print(f'AlphaBetaMinMax as second')
+    test(RandomPlayer(), AlphaBetaMinMaxPlayer(1, depth=2), 1_00, 1)
