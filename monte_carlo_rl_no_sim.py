@@ -98,50 +98,26 @@ class MonteCarloRLPlayer(Player):
         # give a big negative reward, otherwise
         return -10
 
-    def _map_state_to_index(self, game: 'Game', player_id: int) -> tuple['InvestigateGame', str, int]:
-        """
-        Given a game state, this function translates it into an index to access the Q_table.
-
-        Args:
-            game: a game instance;
-            player_id: my player's id.
-
-        Returns:
-            The corresponding canonical game, its representation and index in the list
-            returned by 'Symmetry.get_transformed_states(game)' are returned.
-        """
-
-        # take trasformed states
-        trasformed_states = Symmetry.get_transformed_states(game)
-
-        # list of mapped states to a string in base 3
-        trasformed_states_repr_index = [trasformed_state.get_hashable_state() for trasformed_state in trasformed_states]
-
-        # trasformation index
-        trasformation_index = np.argmin(trasformed_states_repr_index)
-
-        return (
-            trasformed_states[trasformation_index],
-            trasformed_states_repr_index[trasformation_index],
-            trasformation_index,
-        )
-
-    def _update_state_value(self, state_repr_index: str, return_of_rewards: float) -> None:
+    def _update_state_values(self, trajectory: list, reward: float) -> None:
         """
         Update the Q_table according to the Monte Carlo-learning technique.
 
         Args:
-            state_repr_index: the current state index;
-            action: the performed action;
-            return_of_rewards: the return of rewards for the current state.
+            trajectory: the trajectory of the current episode;
+            reward: the final reward of the game.
 
         Returns:
             None.
         """
-        # update the state-value mapping table
-        self._state_values[state_repr_index] = self._state_values[state_repr_index] + self._alpha * (
-            return_of_rewards - self._state_values[state_repr_index]
-        )
+        # define the return of rewards
+        return_of_rewards = reward
+        # for each state in the trajectory
+        for state_repr_index in reversed(trajectory):
+            # update the state-value mapping table
+            self._state_values[state_repr_index] = self._state_values[state_repr_index] + self._alpha * (
+                self._gamma * return_of_rewards - self._state_values[state_repr_index]
+            )
+            return_of_rewards = self._state_values[state_repr_index]
 
     def _step_training(
         self,
@@ -265,7 +241,7 @@ class MonteCarloRLPlayer(Player):
                     state_repr_index = game.get_hashable_state()
 
                     # update the trajectory
-                    trajectory.append((state_repr_index, 0))
+                    trajectory.append(state_repr_index)
 
                     # if we play the same action as before
                     if last_action == action:
@@ -302,19 +278,11 @@ class MonteCarloRLPlayer(Player):
             # get the game reward
             reward = self._game_reward(player, winner)
             # update the trajectory
-            trajectory.append((state_repr_index, reward))
-
+            trajectory.append(state_repr_index)
             # update the rewards history
             self._rewards.append(reward)
-
-            # set the current return of rewards
-            return_of_rewards = self._gamma * reward
-            # for all tuples in trajectory
-            for state_repr_index, reward in trajectory[::-1]:
-                # update the return of rewards
-                # return_of_rewards = reward + self._gamma * return_of_rewards
-                # update the action-value function
-                self._update_state_value(state_repr_index, return_of_rewards)
+            # update the state-values function
+            self._update_state_values(trajectory, reward)
 
             pbar_episodes.set_description(
                 f"# current mean rewards: {sum(self._rewards) / (episode+1):.2f} - # explored states: {len(self._state_values):,} - Current exploration rate: {self._exploration_rate:2f}"
