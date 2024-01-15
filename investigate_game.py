@@ -6,6 +6,26 @@ from symmetry import Symmetry
 import numpy as np
 from collections import defaultdict
 
+POSSIBLE_MOVES = []
+# for each piece position
+for from_pos in set(product([0, 4], range(Game()._board.shape[0]))).union(
+    set(product(range(Game()._board.shape[1]), [0, 4]))
+):
+    # create a list of possible slides
+    slides = list(Move)
+    # shuffle(slides)
+    # for each slide
+    for slide in slides:
+        # make a copy of the current game state
+        state = deepcopy(Game())
+        action = (from_pos, slide)
+        # perfom the move (note: _Game__move is necessary due to name mangling)
+        ok = state._Game__move(from_pos, slide, 0)
+        # if it is valid
+        if ok:
+            # append to the list of possible transitions
+            POSSIBLE_MOVES.append(action)
+
 
 class MissNoAddDict(defaultdict):
     def __missing__(self, __key: Any) -> Any:
@@ -100,21 +120,16 @@ class InvestigateGame(Game):
         # define a list of possible transitions
         transitions = []
         # for each piece position
-        for from_pos in product(range(self._board.shape[1]), range(self._board.shape[0])):
-            # create a list of possible slides
-            slides = list(Move)
-            # shuffle(slides)
-            # for each slide
-            for slide in slides:
-                # make a copy of the current game state
-                state = deepcopy(self)
-                action = (from_pos, slide)
-                # perfom the move (note: _Game__move is necessary due to name mangling)
-                ok = state._Game__move(from_pos, slide, player_id)
-                # if it is valid
-                if ok:
-                    # append to the list of possible transitions
-                    transitions.append((action, state))
+        for from_pos, slide in POSSIBLE_MOVES:
+            # make a copy of the current game state
+            state = deepcopy(self)
+            action = (from_pos, slide)
+            # perfom the move (note: _Game__move is necessary due to name mangling)
+            ok = state._Game__move(from_pos, slide, player_id)
+            # if it is valid
+            if ok:
+                # append to the list of possible transitions
+                transitions.append((action, state))
 
         return transitions
 
@@ -134,32 +149,20 @@ class InvestigateGame(Game):
 
         # get possible transitions
         transitions = self.generate_possible_transitions(player_id)
-        # get the states
-        _, states = zip(*transitions)
-        # convert to list
-        states = list(states)
 
         i = 0
         # for each transitions
-        while i < len(states):
+        while i < len(transitions):
             # compute all the transformed states
-            transformed_states = Symmetry.get_transformed_states(states[i])
+            transformed_states = Symmetry.get_transformed_states(transitions[i][1])
             # delete transformed states
-            states = states[: i + 1] + [state for state in states[i + 1 :] if state not in transformed_states]
+            transitions = transitions[: i + 1] + [
+                transition for transition in transitions[i + 1 :] if transition[1] not in transformed_states
+            ]
             # increment index
             i += 1
 
-        # create a list of unique transitions
-        unique_transitions = []
-        # for each transition
-        for transition in transitions:
-            # check that it refers to a unique state and that another
-            # transition with the same final state has not already been added
-            if transition[1] in states and not any(map(lambda x: x[1] == transition[1], unique_transitions)):
-                # add another unique transition
-                unique_transitions.append(transition)
-
-        return unique_transitions
+        return transitions
 
     def play(
         self,
