@@ -22,16 +22,15 @@ class Symmetry:
 
     rotations = [lambda x: np.rot90(x, k=1), lambda x: np.rot90(x, k=2), lambda x: np.rot90(x, k=3)]
     flips = [lambda x: deepcopy(x), lambda x: np.flipud(x)]
+
     compass = np.array([['', Move.TOP, ''], [Move.LEFT, '', Move.RIGHT], ['', Move.BOTTOM, '']])
-    # canonical from slide
     map_slide_to_compass = {
         Move.TOP: (0, 1),
         Move.LEFT: (1, 0),
         Move.RIGHT: (1, 2),
         Move.BOTTOM: (2, 1),
     }
-    # mapping trasformation - trasformed from slide
-    trasformed_slides = {
+    trasformation_to_canonical_slides = {
         1: np.rot90(compass, k=1),
         2: np.rot90(compass, k=2),
         3: np.rot90(compass, k=3),
@@ -40,8 +39,17 @@ class Symmetry:
         6: np.rot90(np.flipud(compass), k=2),
         7: np.rot90(np.flipud(compass), k=3),
     }
-    # canonical from position
-    canonical_positions = np.array(
+    trasformation_to_non_canonnical_slides = {
+        1: np.rot90(compass, k=-1),
+        2: np.rot90(compass, k=-2),
+        3: np.rot90(compass, k=-3),
+        4: np.flipud(compass),
+        5: np.flipud(np.rot90(compass, k=-1)),
+        6: np.flipud(np.rot90(compass, k=-2)),
+        7: np.flipud(np.rot90(compass, k=-3)),
+    }
+
+    positions = np.array(
         [
             [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)],
             [(0, 1), (1, 1), (2, 1), (3, 1), (4, 1)],
@@ -50,15 +58,24 @@ class Symmetry:
             [(0, 4), (1, 4), (2, 4), (3, 4), (4, 4)],
         ]
     )
-    # mapping trasformation - trasformed from position
-    trasformed_positions = {
-        1: np.rot90(canonical_positions, k=1),
-        2: np.rot90(canonical_positions, k=2),
-        3: np.rot90(canonical_positions, k=3),
-        4: np.flipud(canonical_positions),
-        5: np.rot90(np.flipud(canonical_positions), k=1),
-        6: np.rot90(np.flipud(canonical_positions), k=2),
-        7: np.rot90(np.flipud(canonical_positions), k=3),
+    trasformation_to_canonical_positions = {
+        1: np.rot90(positions, k=1),
+        2: np.rot90(positions, k=2),
+        3: np.rot90(positions, k=3),
+        4: np.flipud(positions),
+        5: np.rot90(np.flipud(positions), k=1),
+        6: np.rot90(np.flipud(positions), k=2),
+        7: np.rot90(np.flipud(positions), k=3),
+    }
+
+    trasformation_to_non_canonnical_positions = {
+        1: np.rot90(positions, k=-1),
+        2: np.rot90(positions, k=-2),
+        3: np.rot90(positions, k=-3),
+        4: np.flipud(positions),
+        5: np.flipud(np.rot90(positions, k=-1)),
+        6: np.flipud(np.rot90(positions, k=-2)),
+        7: np.flipud(np.rot90(positions, k=-3)),
     }
 
     @classmethod
@@ -125,11 +142,34 @@ class Symmetry:
         from_pos, slide = action
 
         return (
-            tuple(Symmetry.trasformed_positions[transformation_index][(from_pos[1], from_pos[0])]),
-            Symmetry.trasformed_slides[transformation_index][Symmetry.map_slide_to_compass[slide]],
+            tuple(Symmetry.trasformation_to_canonical_positions[transformation_index][(from_pos[1], from_pos[0])]),
+            Symmetry.trasformation_to_canonical_slides[transformation_index][Symmetry.map_slide_to_compass[slide]],
         )
 
-    '''
+    @classmethod
+    def get_canonical_action_from_action(
+        cls, action: tuple[tuple[int, int], Move], transformation_index: int
+    ) -> tuple[tuple[int, int], Move]:
+        '''
+        Gives the corresponding canonical action for a state which is not canonical.
+
+        Args:
+            action: the action;
+            transformation_index: the corrisponding index of the trasformation applied.
+
+        Returns:
+            The corrisponding canonical action is returned.
+        '''
+        if transformation_index == 0:
+            return action
+
+        from_pos, slide = action
+
+        return (
+            tuple(Symmetry.trasformation_to_non_canonnical_positions[transformation_index][(from_pos[1], from_pos[0])]),
+            Symmetry.trasformation_to_non_canonnical_slides[transformation_index][Symmetry.map_slide_to_compass[slide]],
+        )
+
     @classmethod
     def swap_board_players(cls, game: 'Game') -> 'Game':
         """
@@ -148,4 +188,3 @@ class Symmetry:
         game._board[tmp] = 1
 
         return game
-    '''
