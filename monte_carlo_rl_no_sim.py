@@ -6,8 +6,7 @@ import math
 from random import random, choice
 from tqdm import trange
 from random_player import RandomPlayer
-from collections import defaultdict
-from investigate_game import InvestigateGame
+from investigate_game import InvestigateGame, MissNoAddDict
 from min_max import MinMaxPlayer
 from symmetry import Symmetry
 from copy import deepcopy
@@ -47,7 +46,7 @@ class MonteCarloRLPlayer(Player):
             None.
         """
         super().__init__()
-        self._state_values = defaultdict(float)  # define the State-value function
+        self._state_values = MissNoAddDict(float)  # define the State-value function
         self._n_episodes = n_episodes  # define the number of episodes for the training phase
         self._gamma = gamma  # define the discount rate of the Bellman equation
         self._alpha = alpha  # define how much information to incorporate from the new experience
@@ -116,9 +115,7 @@ class MonteCarloRLPlayer(Player):
         trasformed_states = Symmetry.get_transformed_states(game)
 
         # list of mapped states to a string in base 3
-        trasformed_states_repr_index = [
-            trasformed_state.get_hashable_state(player_id) for trasformed_state in trasformed_states
-        ]
+        trasformed_states_repr_index = [trasformed_state.get_hashable_state() for trasformed_state in trasformed_states]
 
         # trasformation index
         trasformation_index = np.argmin(trasformed_states_repr_index)
@@ -129,7 +126,7 @@ class MonteCarloRLPlayer(Player):
             trasformation_index,
         )
 
-    def _update_state_values(self, state_repr_index: str, return_of_rewards: float) -> None:
+    def _update_state_value(self, state_repr_index: str, return_of_rewards: float) -> None:
         """
         Update the Q_table according to the Monte Carlo-learning technique.
 
@@ -172,7 +169,7 @@ class MonteCarloRLPlayer(Player):
         # perform eploitation, otherwise
         else:
             # take the action with min return of rewards of the oppenent
-            transition = max(transitions, key=lambda t: self._state_values[t[1].get_hashable_state(player_id)])
+            transition = max(transitions, key=lambda t: self._state_values[t[1].get_hashable_state()])
 
         return transition
 
@@ -193,9 +190,9 @@ class MonteCarloRLPlayer(Player):
         # get all possible transitions
         transitions = game.generate_possible_transitions(player_id)
         # if one of the following states is known
-        if any([t[1].get_hashable_state(player_id) in self._state_values for t in transitions]):
+        if any([t[1].get_hashable_state() in self._state_values for t in transitions]):
             # take the action with min return of rewards of the oppenent
-            action, _ = max(transitions, key=lambda t: self._state_values[t[1].get_hashable_state(player_id)])
+            action, _ = max(transitions, key=lambda t: self._state_values[t[1].get_hashable_state()])
         else:
             # choose a random action
             action, _ = choice(transitions)
@@ -265,7 +262,7 @@ class MonteCarloRLPlayer(Player):
                     # get an action
                     action, game = self._step_training(game, player_idx)
 
-                    state_repr_index = game.get_hashable_state(player_idx)
+                    state_repr_index = game.get_hashable_state()
 
                     # update the trajectory
                     trajectory.append((state_repr_index, 0))
@@ -311,13 +308,13 @@ class MonteCarloRLPlayer(Player):
             self._rewards.append(reward)
 
             # set the current return of rewards
-            return_of_rewards = 0
+            return_of_rewards = self._gamma * reward
             # for all tuples in trajectory
             for state_repr_index, reward in trajectory[::-1]:
                 # update the return of rewards
-                return_of_rewards = reward + self._gamma * return_of_rewards
+                # return_of_rewards = reward + self._gamma * return_of_rewards
                 # update the action-value function
-                self._update_state_values(state_repr_index, return_of_rewards)
+                self._update_state_value(state_repr_index, return_of_rewards)
 
             pbar_episodes.set_description(
                 f"# current mean rewards: {sum(self._rewards) / (episode+1):.2f} - # explored states: {len(self._state_values):,} - Current exploration rate: {self._exploration_rate:2f}"

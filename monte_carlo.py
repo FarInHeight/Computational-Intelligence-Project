@@ -6,8 +6,7 @@ import math
 from random import random, choice
 from tqdm import trange
 from random_player import RandomPlayer
-from collections import defaultdict
-from investigate_game import InvestigateGame
+from investigate_game import InvestigateGame, MissNoAddDict
 from min_max import MinMaxPlayer
 from symmetry import Symmetry
 from copy import deepcopy
@@ -146,9 +145,9 @@ class MonteCarloQLPlayer(Player):
         if state_repr_index not in self._q_table:
             # create its entry in the action-value mapping table
             self._q_table[state_repr_index] = {}
-            self._q_table[state_repr_index]['value'] = defaultdict(float)
+            self._q_table[state_repr_index]['value'] = MissNoAddDict(float)
             # create its entry in the counters of the return of rewards
-            self._q_table[state_repr_index]['counter'] = defaultdict(float)
+            self._q_table[state_repr_index]['counter'] = MissNoAddDict(float)
         # update the counters of the return of rewards
         self._q_table[state_repr_index]['counter'][action] += 1
         # update the action-value mapping table
@@ -188,9 +187,9 @@ class MonteCarloQLPlayer(Player):
             if state_repr_index not in self._q_table:
                 # create its entry in the action-value mapping table
                 self._q_table[state_repr_index] = {}
-                self._q_table[state_repr_index]['value'] = defaultdict(float)
+                self._q_table[state_repr_index]['value'] = MissNoAddDict(float)
                 # create its entry in the counters of the return of rewards
-                self._q_table[state_repr_index]['counter'] = defaultdict(float)
+                self._q_table[state_repr_index]['counter'] = MissNoAddDict(float)
                 # choose a random transition
                 transition = choice(transitions)
             else:

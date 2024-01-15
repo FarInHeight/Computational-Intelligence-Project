@@ -1,9 +1,15 @@
 from game import Game, Move, Player
 from copy import deepcopy
 from itertools import product
-from typing import Literal
+from typing import Literal, Any
 from symmetry import Symmetry
 import numpy as np
+from collections import defaultdict
+
+
+class MissNoAddDict(defaultdict):
+    def __missing__(self, __key: Any) -> Any:
+        return self.default_factory()
 
 
 class InvestigateGame(Game):
@@ -59,7 +65,7 @@ class InvestigateGame(Game):
         '''
         return (self._board == other._board).all()
 
-    def get_hashable_state(self, player_id: int) -> int:
+    def get_hashable_state(self, player_id: int | None = None) -> int:
         '''
         Get a unique representation of a state that can be used as a key for a dictionary.
 
@@ -74,7 +80,9 @@ class InvestigateGame(Game):
         # change not taken tiles values to 0
         state._board += 1
         # map the trasformed_state to an integer in base 3
-        return int(''.join(str(_) for _ in state._board.flatten()) + str(player_id), base=3)
+        return int(
+            ''.join(str(_) for _ in state._board.flatten()) + ('' if player_id is None else str(player_id)), base=3
+        )
 
     def generate_possible_transitions(
         self, player_id: int

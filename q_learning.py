@@ -6,8 +6,7 @@ import math
 from random import random, choice
 from tqdm import trange
 from random_player import RandomPlayer
-from collections import defaultdict
-from investigate_game import InvestigateGame
+from investigate_game import InvestigateGame, MissNoAddDict
 from min_max import MinMaxPlayer
 from symmetry import Symmetry
 from copy import deepcopy
@@ -145,11 +144,11 @@ class QLearningRLPlayer(Player):
         # if the current state is unknown
         if state_repr_index not in self._q_table:
             # create its entry in the action-value mapping table
-            self._q_table[state_repr_index] = defaultdict(float)
+            self._q_table[state_repr_index] = MissNoAddDict(float)
         # if the next state is unknown
         if new_state_repr_index not in self._q_table:
             # create its entry in the action-value mapping table
-            self._q_table[new_state_repr_index] = defaultdict(float)
+            self._q_table[new_state_repr_index] = MissNoAddDict(float)
         prev_value = self._q_table[state_repr_index][action]
         # update the action-value mapping entry for the current state using Q-learning
         self._q_table[state_repr_index][action] = (1 - self._alpha) * prev_value + self._alpha * (
@@ -186,7 +185,7 @@ class QLearningRLPlayer(Player):
             # if the current state is unknown
             if state_repr_index not in self._q_table:
                 # create its entry in the action-value mapping table
-                self._q_table[state_repr_index] = defaultdict(float)
+                self._q_table[state_repr_index] = MissNoAddDict(float)
                 # choose a random transition
                 transition = choice(transitions)
             else:

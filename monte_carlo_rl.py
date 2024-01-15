@@ -6,8 +6,7 @@ import math
 from random import random, choice
 from tqdm import trange
 from random_player import RandomPlayer
-from collections import defaultdict
-from investigate_game import InvestigateGame
+from investigate_game import InvestigateGame, MissNoAddDict
 from min_max import MinMaxPlayer
 from symmetry import Symmetry
 from copy import deepcopy
@@ -47,7 +46,7 @@ class MonteCarloRLPlayer(Player):
             None.
         """
         super().__init__()
-        self._state_values = defaultdict(float)  # define the State-value function
+        self._state_values = MissNoAddDict(float)  # define the State-value function
         self._n_episodes = n_episodes  # define the number of episodes for the training phase
         self._gamma = gamma  # define the discount rate of the Bellman equation
         self._alpha = alpha  # define how much information to incorporate from the new experience
