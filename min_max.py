@@ -4,6 +4,7 @@ from game import Game, Move, Player
 from investigate_game import InvestigateGame
 import pickle
 from collections import namedtuple
+from joblib import Parallel, delayed
 
 EntryMinMax = namedtuple('EntryMinMax', ['depth', 'value'])
 
@@ -13,14 +14,15 @@ class MinMaxPlayer(Player):
     Class representing a player which plays according to the Min-Max algorithm.
     """
 
-    def __init__(self, player_id: int, depth: int = 3, symmetries: bool = False) -> None:
+    def __init__(self, player_id: int, depth: int = 3, symmetries: bool = False, enhance: bool = False) -> None:
         """
         Constructor of the Min-Max player.
 
         Args:
             player_id: the player's id;
             depth: maximum depth of the Min-Max search tree;
-            symmetries: flag to consider the symmetries or not.
+            symmetries: flag to consider the symmetries or not;
+            enhance: choose whether to enhance the evaluation function.
 
         Returns:
             None.
@@ -30,11 +32,12 @@ class MinMaxPlayer(Player):
         self._opponent_player_id = abs(1 - self._player_id)
         self._depth = depth
         self._symmetries = symmetries
+        self._enhance = enhance
         self._visited_max_states = {}
         self._visited_min_states = {}
         self._hit = 0
 
-    def evaluation_function(self, game: 'InvestigateGame') -> int | float:
+    def evaluation_function(self, game: 'InvestigateGame', enhance: bool = False) -> int | float:
         """
         Given the current state of the game, a static evaluation is performed
         and it is determined if the current position is an advantageous one
@@ -43,12 +46,13 @@ class MinMaxPlayer(Player):
         zero indicates a balanced situation and values lower than
         zero indicate that Min will probably win.
         The value is calculated as:
-        (number of complete rows, columns, or diagonals that are stil open
+        (number of complete rows, columns, or diagonals that are still open
         for MAX) - (number of complete rows, columns, or diagonals that are
-        stil open for MIN)
+        still open for MIN)
 
         Args:
-            game: the current game state.
+            game: the current game state;
+            enhance: choose whether to weight a row according to the number of items taken.
 
         Return:
             An estimate value of how much a current player is winning
@@ -72,7 +76,6 @@ class MinMaxPlayer(Player):
         # turn each player id into a type compatible with the game board
         max_player = np.int16(max_player)
         min_player = np.int16(min_player)
-        neutral_pos = np.int16(-1)
 
         # define the max value
         max_value = 0
@@ -95,20 +98,18 @@ class MinMaxPlayer(Player):
 
         # for each board line
         for line in lines:
-            # take the max piece positions
-            max_taken_positions = line == max_player
-            # take the min piece positions
-            min_taken_positions = line == min_player
-            # take the neutral piece positions
-            neutral_positions = line == neutral_pos
+            # count the taken pieces by max
+            max_taken = (line == max_player).sum()
+            # count the taken pieces by min
+            min_taken = (line == min_player).sum()
             # if all the pieces are neutral or belong to the max player
-            if all(np.logical_or(max_taken_positions, neutral_positions)):
+            if min_taken == 0 and max_taken > 0:
                 # increment the max value
-                max_value += 1
+                max_value += max_taken if enhance else 1
             # if all the pieces are neutral or belong to the min player
-            if all(np.logical_or(min_taken_positions, neutral_positions)):
+            if max_taken == 0 and min_taken > 0:
                 # increment the min value
-                min_value += 1
+                min_value += min_taken if enhance else 1
 
         return max_value - min_value
 
@@ -134,11 +135,11 @@ class MinMaxPlayer(Player):
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
             # get terminal value
-            value = self.evaluation_function(game)
+            value = self.evaluation_function(game, self._enhance)
             # save max_value in hash_table
             self._visited_max_states[key] = EntryMinMax(0, value)
             # return its heuristic value
-            return self.evaluation_function(game)
+            return value
         # set the current best max value
         value = float('-inf')
         # get all possible game transitions or canonical transitions
@@ -178,7 +179,7 @@ class MinMaxPlayer(Player):
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
             # get terminal value
-            value = self.evaluation_function(game)
+            value = self.evaluation_function(game, self._enhance)
             # save min_value in hash_table
             self._visited_min_states[key] = EntryMinMax(0, value)
             # return its heuristic value
@@ -218,10 +219,15 @@ class MinMaxPlayer(Player):
             if self._symmetries
             else game.generate_possible_transitions(self._player_id)
         )
-        # for all possible actions and result states
-        actions, states, keys = zip(*transitions)
+        # parallelize min_value
+        values = Parallel(n_jobs=-1)(
+            delayed(self.min_value)(state, key, self._depth - 1) for _, state, key in transitions
+        )
         # return the action corresponding to the best estimated move
-        _, action = max(enumerate(actions), key=lambda x: self.min_value(states[x[0]], keys[x[0]], self._depth - 1))
+        _, (action, _, _) = max(
+            enumerate(transitions),
+            key=lambda t: values[t[0]],
+        )
         # return it
         return action
 
@@ -258,19 +264,20 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
     Min-Max algorithm improved by the alpha-beta pruning technique.
     """
 
-    def __init__(self, player_id: int, depth: int = 3, symmetries: bool = False) -> None:
+    def __init__(self, player_id: int, depth: int = 3, symmetries: bool = False, enhance: bool = False) -> None:
         """
         Constructor of the Min-Max + Alpha-Beta pruning player.
 
         Args:
             player_id: the player's id;
             depth: maximum depth of the Min-Max search tree;
-            symmetries: flag to consider the symmetries or not.
+            symmetries: flag to consider the symmetries or not;
+            enhance: choose whether to enhance the evaluation function.
 
         Returns:
             None.
         """
-        super().__init__(player_id, depth, symmetries)
+        super().__init__(player_id, depth, symmetries, enhance)
 
     def max_value(
         self, game: 'Game', key: int, depth: int, alpha: float, beta: float
@@ -300,7 +307,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
             # get terminal value
-            value = self.evaluation_function(game)
+            value = self.evaluation_function(game, self._enhance)
             # save min_value in hash_table
             self._visited_max_states[key] = EntryMinMax(0, value)
             # return its heuristic value and no move
@@ -363,7 +370,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         # if there are no more levels to examinate or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
             # get terminal value
-            value = self.evaluation_function(game)
+            value = self.evaluation_function(game, self._enhance)
             # save min_value in hash_table
             self._visited_min_states[key] = EntryMinMax(0, value)
             # return its heuristic value and no move
@@ -416,12 +423,15 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             if self._symmetries
             else game.generate_possible_transitions(self._player_id)
         )
-        # for all possible actions and result states
-        actions, states, keys = zip(*transitions)
+        # parallelize min_value
+        values = Parallel(n_jobs=-1)(
+            delayed(self.min_value)(state, key, self._depth - 1, float('-inf'), float('inf'))
+            for _, state, key in transitions
+        )
         # return the action corresponding to the best estimated move
-        _, action = max(
-            enumerate(actions),
-            key=lambda t: self.min_value(states[t[0]], keys[t[0]], self._depth - 1, float('-inf'), float('inf')),
+        _, (action, _, _) = max(
+            enumerate(transitions),
+            key=lambda t: values[t[0]],
         )
         # return it
         return action
@@ -435,14 +445,24 @@ if __name__ == '__main__':
         wins = 0
         pbar = trange(num_games)
         for game in pbar:
-            g = Game()
-            w = g.play(player1, player2)
+            g = InvestigateGame(Game())
+            w = g.play(player1, player2, max_steps_draw=10)
             if w == idx:
                 wins += 1
             pbar.set_description(f'Current percentage of wins player {idx}: {wins/(game+1):%}')
         print(f'Percentage of wins player {idx}: {wins/num_games:%}')
 
     print(f'AlphaBetaMinMax as first')
-    test(AlphaBetaMinMaxPlayer(0, depth=4, symmetries=True), RandomPlayer(), 1_00, 0)
+    test(
+        AlphaBetaMinMaxPlayer(0, depth=3, symmetries=False, enhance=True),
+        AlphaBetaMinMaxPlayer(1, depth=3, symmetries=False, enhance=False),
+        1,
+        0,
+    )
     print(f'AlphaBetaMinMax as second')
-    test(RandomPlayer(), AlphaBetaMinMaxPlayer(1, depth=4, symmetries=True), 1_00, 1)
+    test(
+        AlphaBetaMinMaxPlayer(0, depth=3, symmetries=False, enhance=False),
+        AlphaBetaMinMaxPlayer(1, depth=3, symmetries=False, enhance=True),
+        1,
+        1,
+    )

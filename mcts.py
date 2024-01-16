@@ -42,9 +42,7 @@ class MCTSPlayer(Player):
                 if self._symmetries
                 else node.state.generate_possible_transitions(node.state.get_current_player())
             )
-            for _, state in transitions:
-                state.current_player_idx = 1 - state.current_player_idx
-            node.children = {action: NodeMCT(state=next_state, parent=node) for action, next_state in transitions}
+            node.children = {action: NodeMCT(state=next_state, parent=node) for action, next_state, _ in transitions}
 
         return self._select(node)
 
@@ -57,7 +55,7 @@ class MCTSPlayer(Player):
                 if self._symmetries
                 else state.generate_possible_transitions(state.get_current_player())
             )
-            _, state = choice(transitions)
+            _, state, _ = choice(transitions)
 
         if player_id == state.check_winner():
             return -1
@@ -107,6 +105,6 @@ if __name__ == '__main__':
     # test(RandomPlayer(), MCTSPlayer(), 3, 1)
 
     print(f'MCTSPlayer as first with symmetries')
-    test(MCTSPlayer(symmetries=True), RandomPlayer(), 3, 0)
+    test(MCTSPlayer(symmetries=False), RandomPlayer(), 3, 0)
     print(f'MCTSPlayer as second with symmetries')
-    test(RandomPlayer(), MCTSPlayer(symmetries=True), 3, 1)
+    test(RandomPlayer(), MCTSPlayer(symmetries=False), 3, 1)

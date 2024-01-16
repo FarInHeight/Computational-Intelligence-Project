@@ -126,6 +126,8 @@ class InvestigateGame(Game):
             ok = state._Game__move(from_pos, slide, player_id)
             # if it is valid
             if ok:
+                # update the current player index
+                state.current_player_idx = 1 - state.current_player_idx
                 # append to the list of possible transitions
                 transitions.append((action, state, state.get_hashable_state(player_id)))
 
@@ -157,8 +159,11 @@ class InvestigateGame(Game):
             ok = state._Game__move(from_pos, slide, player_id)
             # if it is valid
             if ok:
+                # update the current player index
+                state.current_player_idx = 1 - state.current_player_idx
                 # get the equivalent canonical state
                 canonical_state = Symmetry.get_canonical_state(state, player_id)
+                # if it is a new canonical state
                 if canonical_state not in canonical_states:
                     # append to the list of possible transitions
                     transitions.append((action, state, canonical_state))
@@ -166,37 +171,6 @@ class InvestigateGame(Game):
                     canonical_states.add(canonical_state)
 
         return transitions
-
-    """ def generate_canonical_transitions(
-        self, player_id: int
-    ) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
-        '''
-        Generate all possible game transitions that a given player can make considering the canonical states.
-
-        Args:
-            player_id: the player's id.
-
-        Returns:
-            A list of pairs of actions and corresponding game states
-            is returned.
-        '''
-
-        # get possible transitions
-        transitions = self.generate_possible_transitions(player_id)
-
-        i = 0
-        # for each transitions
-        while i < len(transitions):
-            # compute all the transformed states
-            transformed_states = Symmetry.get_transformed_states(transitions[i][1])
-            # delete transformed states
-            transitions = transitions[: i + 1] + [
-                transition for transition in transitions[i + 1 :] if transition[1] not in transformed_states
-            ]
-            # increment index
-            i += 1
-
-        return transitions """
 
     def play(
         self,
