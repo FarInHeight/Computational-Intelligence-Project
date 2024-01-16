@@ -9,7 +9,6 @@ from random_player import RandomPlayer
 from investigate_game import InvestigateGame, MissNoAddDict
 from min_max import MinMaxPlayer
 from symmetry import Symmetry
-from copy import deepcopy
 
 
 class MonteCarloRLPlayer(Player):
@@ -19,11 +18,11 @@ class MonteCarloRLPlayer(Player):
 
     def __init__(
         self,
-        n_episodes: int = 200_000,
+        n_episodes: int = 500_000,
         gamma: float = 0.95,
         alpha: float = 0.1,
         min_exploration_rate: float = 0.01,
-        exploration_decay_rate: float = 3e-5,
+        exploration_decay_rate: float = 1e-5,
         minmax: bool = False,
         switch_ratio: int = 0.9,
         depth: int = 1,
@@ -98,52 +97,26 @@ class MonteCarloRLPlayer(Player):
         # give a big negative reward, otherwise
         return -10
 
-    def _map_state_to_index(self, game: 'Game', player_id: int) -> tuple['InvestigateGame', str, int]:
-        """
-        Given a game state, this function translates it into an index to access the Q_table.
-
-        Args:
-            game: a game instance;
-            player_id: my player's id.
-
-        Returns:
-            The corresponding canonical game, its representation and index in the list
-            returned by 'Symmetry.get_transformed_states(game)' are returned.
-        """
-
-        # take trasformed states
-        trasformed_states = Symmetry.get_transformed_states(game)
-
-        # list of mapped states to a string in base 3
-        trasformed_states_repr_index = [
-            trasformed_state.get_hashable_state(player_id) for trasformed_state in trasformed_states
-        ]
-
-        # trasformation index
-        trasformation_index = np.argmin(trasformed_states_repr_index)
-
-        return (
-            trasformed_states[trasformation_index],
-            trasformed_states_repr_index[trasformation_index],
-            trasformation_index,
-        )
-
-    def _update_state_values(self, state_repr_index: str, return_of_rewards: float) -> None:
+    def _update_state_values(self, trajectory: list, reward: float) -> None:
         """
         Update the Q_table according to the Monte Carlo-learning technique.
 
         Args:
-            state_repr_index: the current state index;
-            action: the performed action;
-            return_of_rewards: the return of rewards for the current state.
+            trajectory: the trajectory of the current episode;
+            reward: the final reward of the game.
 
         Returns:
             None.
         """
-        # update the state-value mapping table
-        self._state_values[state_repr_index] = self._state_values[state_repr_index] + self._alpha * (
-            return_of_rewards - self._state_values[state_repr_index]
-        )
+        # define the return of rewards
+        return_of_rewards = reward
+        # for each state in the trajectory
+        for state_repr_index in reversed(trajectory):
+            # update the state-value mapping table
+            self._state_values[state_repr_index] = self._state_values[state_repr_index] + self._alpha * (
+                self._gamma * return_of_rewards - self._state_values[state_repr_index]
+            )
+            return_of_rewards = self._state_values[state_repr_index]
 
     def _step_training(
         self,
@@ -161,28 +134,19 @@ class MonteCarloRLPlayer(Player):
             A move to play is returned.
         """
 
-        # get all possible transitions
-        transitions = game.generate_possible_transitions(player_id)
-
-        # create transition with canonical states
-        canonical_transitions = []
-        for a, state in transitions:
-            states = Symmetry.get_transformed_states(state)
-            states = [state.get_hashable_state(player_id) for state in states]
-            canonical_transitions.append((a, state, min(states)))
+        # get all possible canonical transitions
+        transitions = game.generate_canonical_transitions(player_id)
 
         # randomly perform exploration
         if random() < self._exploration_rate:
             # choose a random transition
-            action, next_state, canonical_repr_index = choice(canonical_transitions)
+            transition = choice(transitions)
         # perform eploitation, otherwise
         else:
             # take the action with min return of rewards of the oppenent
-            action, next_state, canonical_repr_index = max(
-                canonical_transitions, key=lambda t: self._state_values[t[2]]
-            )
+            transition = max(transitions, key=lambda t: self._state_values[t[2]])
 
-        return action, next_state, canonical_repr_index
+        return transition
 
     def make_move(self, game: 'Game') -> tuple[tuple[int, int], Move]:
         """
@@ -198,23 +162,10 @@ class MonteCarloRLPlayer(Player):
         game = InvestigateGame(game)
         # get my id
         player_id = game.get_current_player()
-        # get all possible transitions
-        transitions = game.generate_possible_transitions(player_id)
-
-        # create transition with canonical states
-        canonical_transitions = []
-        for a, state in transitions:
-            states = Symmetry.get_transformed_states(state)
-            states = [state.get_hashable_state(player_id) for state in states]
-            canonical_transitions.append((a, min(states)))
-
-        # if one of the following states is known
-        if any([t[1] in self._state_values for t in canonical_transitions]):
-            # take the action with min return of rewards of the oppenent
-            action, _ = max(canonical_transitions, key=lambda t: self._state_values[t[1]])
-        else:
-            # choose a random action
-            action, _ = choice(transitions)
+        # get all possible canonical transitions
+        transitions = game.generate_canonical_transitions(player_id)
+        # take the action with min return of rewards of the oppenent
+        action, _, _ = max(transitions, key=lambda t: self._state_values[t[1]])
 
         # return the action
         return action
@@ -279,10 +230,10 @@ class MonteCarloRLPlayer(Player):
                 # if it is our turn
                 if self == player:
                     # get an action
-                    action, game, canonical_state_repr_index = self._step_training(game, player_idx)
+                    action, game, state_repr_index = self._step_training(game, player_idx)
 
                     # update the trajectory
-                    trajectory.append((canonical_state_repr_index, 0))
+                    trajectory.append(state_repr_index)
 
                     # if we play the same action as before
                     if last_action == action:
@@ -305,6 +256,8 @@ class MonteCarloRLPlayer(Player):
                         move = player.make_move(game)
                         # perform the move
                         ok = game._Game__move(*move, player_idx)
+                    # update the trajectory
+                    # trajectory.append(Symmetry.get_canonical_state(game, 1 - player_idx))
 
                 # check if there is a winner
                 winner = game.check_winner()
@@ -314,27 +267,15 @@ class MonteCarloRLPlayer(Player):
                 np.exp(-self._exploration_decay_rate * episode), self._min_exploration_rate, 1
             )
 
-            # delete last tuple in trajectory
-            trajectory.pop()
             # get the game reward
             reward = self._game_reward(player, winner)
-            # update the trajectory
-            trajectory.append((canonical_state_repr_index, reward))
-
             # update the rewards history
             self._rewards.append(reward)
-
-            # set the current return of rewards
-            return_of_rewards = 0
-            # for all tuples in trajectory
-            for state_repr_index, reward in trajectory[::-1]:
-                # update the return of rewards
-                return_of_rewards = reward + self._gamma * return_of_rewards
-                # update the action-value function
-                self._update_state_values(state_repr_index, return_of_rewards)
+            # update the state-values function
+            self._update_state_values(trajectory, reward)
 
             pbar_episodes.set_description(
-                f"# current mean rewards: {sum(self._rewards) / (episode+1):.2f} - # explored states: {len(self._state_values):,} - Current exploration rate: {self._exploration_rate:2f}"
+                f"# last 1_000 episodes mean reward: {sum(self._rewards[-1_000:]) / 1_000:.2f} - # explored states: {len(self._state_values):,} - Current exploration rate: {self._exploration_rate:2f}"
             )
 
         print(f'** Last 1_000 episodes - Mean rewards value: {sum(self._rewards[-1_000:]) / 1_000:.2f} **')
@@ -368,9 +309,9 @@ class MonteCarloRLPlayer(Player):
 
 
 if __name__ == '__main__':
-    # create the Q-learning player
-    monte_carlo_rl_agent = MonteCarloRLPlayer(n_episodes=500_000, exploration_decay_rate=1e-5)
-    # train the Q-learning player
+    # create the
+    monte_carlo_rl_agent = MonteCarloRLPlayer()
+    # train the
     monte_carlo_rl_agent.train(max_steps_draw=10)
-    # serialize the Q-learning player
-    monte_carlo_rl_agent.save('agents/monte_carlo_rl_agent_4.pkl')
+    # serialize the
+    monte_carlo_rl_agent.save('agents/monte_carlo_rl_agent_no_sim2.pkl')

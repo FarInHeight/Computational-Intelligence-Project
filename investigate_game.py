@@ -85,7 +85,7 @@ class InvestigateGame(Game):
         '''
         return (self._board == other._board).all()
 
-    def get_hashable_state(self, player_id: int | None = None) -> int:
+    def get_hashable_state(self, player_id: int) -> int:
         '''
         Get a unique representation of a state that can be used as a key for a dictionary.
 
@@ -100,9 +100,7 @@ class InvestigateGame(Game):
         # change not taken tiles values to 0
         state._board += 1
         # map the trasformed_state to an integer in base 3
-        return int(
-            ''.join(str(_) for _ in state._board.flatten()) + ('' if player_id is None else str(player_id)), base=3
-        )
+        return int(''.join(str(_) for _ in state._board.flatten()) + str(player_id), base=3)
 
     def generate_possible_transitions(
         self, player_id: int
@@ -114,8 +112,8 @@ class InvestigateGame(Game):
             player_id: the player's id.
 
         Returns:
-            A list of pairs of actions and corresponding game states
-            is returned.
+            A list of 3-length tuples of actions, corresponding game states and their
+            representations is returned.
         '''
         # define a list of possible transitions
         transitions = []
@@ -129,7 +127,7 @@ class InvestigateGame(Game):
             # if it is valid
             if ok:
                 # append to the list of possible transitions
-                transitions.append((action, state))
+                transitions.append((action, state, state.get_hashable_state(player_id)))
 
         return transitions
 
@@ -148,8 +146,8 @@ class InvestigateGame(Game):
         '''
         # define a list of possible transitions
         transitions = []
-        # define a list of canonical states
-        canonical_states = []
+        # define a set of canonical states
+        canonical_states = set()
         # for each piece position
         for from_pos, slide in POSSIBLE_MOVES:
             # make a copy of the current game state
@@ -159,21 +157,17 @@ class InvestigateGame(Game):
             ok = state._Game__move(from_pos, slide, player_id)
             # if it is valid
             if ok:
-                canonical_state = min(
-                    [
-                        trasformed_state.get_hashable_state(player_id)
-                        for trasformed_state in Symmetry.get_transformed_states(state)
-                    ]
-                )
+                # get the equivalent canonical state
+                canonical_state = Symmetry.get_canonical_state(state, player_id)
                 if canonical_state not in canonical_states:
                     # append to the list of possible transitions
                     transitions.append((action, state, canonical_state))
                     # appent to the list of canonical states
-                    canonical_states.append(canonical_state)
+                    canonical_states.add(canonical_state)
 
         return transitions
 
-    def generate_canonical_transitions2(
+    """ def generate_canonical_transitions(
         self, player_id: int
     ) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
         '''
@@ -202,7 +196,7 @@ class InvestigateGame(Game):
             # increment index
             i += 1
 
-        return transitions
+        return transitions """
 
     def play(
         self,

@@ -1,5 +1,4 @@
 from game import Move
-from game import Game
 import numpy as np
 from copy import deepcopy
 
@@ -22,6 +21,7 @@ class Symmetry:
 
     rotations = [lambda x: np.rot90(x, k=1), lambda x: np.rot90(x, k=2), lambda x: np.rot90(x, k=3)]
     flips = [lambda x: deepcopy(x), lambda x: np.flipud(x)]
+    swaps = [lambda x: deepcopy(x), lambda x: Symmetry.__swap_board_players(x)]
 
     compass = np.array([['', Move.TOP, ''], [Move.LEFT, '', Move.RIGHT], ['', Move.BOTTOM, '']])
     map_slide_to_compass = {
@@ -79,9 +79,9 @@ class Symmetry:
     }
 
     @classmethod
-    def get_transformed_states(cls, game: 'Game') -> list['Game']:
+    def get_canonical_state(cls, game: 'InvestigateGame', player_id: int = None) -> str:
         '''
-        Apply all possible transformations to the state and return a list of equivalent transformed states.
+        Apply all possible transformations to the state and return the canonical state representation.
         To compute all equivalent states, apply:
         - a 90° rotation to the original state;
         - a 180° rotation to the original state;
@@ -90,37 +90,44 @@ class Symmetry:
         - a 90° rotation to the flipped state;
         - a 180° rotation to the flipped state;
         - a 270° rotation to the flipped state.
+        These trasformation are applied to the original state and the swapped state.
 
         Args:
-            game: a game instance.
+            game: a game instance;
 
         Returns:
-            A list of equivalent transformed states is returned.
+            The canonical state representation is returned.
         '''
 
         # define list of transformed states
         transformed_states = []
 
-        # for each flip
-        for flip in Symmetry.flips:
+        # for each swap
+        for idx, swap in enumerate(Symmetry.swaps):
             # copy of the state
-            new_state = deepcopy(game)
-            # transform the board
-            flipped_board = flip(new_state._board)
-            # new flipped state
-            new_state._board = flipped_board
-            # append transformed state
-            transformed_states.append(new_state)
-            # add rotated states
-            for rotate in Symmetry.rotations:
+            swapped_state = deepcopy(game)
+            # swap the board
+            swapped_state._board = swap(swapped_state._board)
+            # for each flip
+            for flip in Symmetry.flips:
                 # copy of the state
-                rotated_new_state = deepcopy(new_state)
+                flipped_state = deepcopy(swapped_state)
                 # transform the board
-                rotated_new_state._board = rotate(rotated_new_state._board)
+                flipped_state._board = flip(flipped_state._board)
                 # append transformed state
-                transformed_states.append(rotated_new_state)
+                transformed_states.append(flipped_state.get_hashable_state(player_id if idx == 0 else 1 - player_id))
+                # add rotated states
+                for rotate in Symmetry.rotations:
+                    # copy of the state
+                    rotated_new_state = deepcopy(flipped_state)
+                    # transform the board
+                    rotated_new_state._board = rotate(rotated_new_state._board)
+                    # append transformed state
+                    transformed_states.append(
+                        rotated_new_state.get_hashable_state(player_id if idx == 0 else 1 - player_id)
+                    )
 
-        return transformed_states
+        return min(transformed_states)
 
     @classmethod
     def get_action_from_canonical_action(
@@ -171,20 +178,19 @@ class Symmetry:
         )
 
     @classmethod
-    def swap_board_players(cls, game: 'Game') -> 'Game':
+    def __swap_board_players(cls, board: np.ndarray) -> np.ndarray:
         """
-        Trasform the game by swapping the players.
+        Trasform the board of the game by swapping the players.
 
         Args:
-            game: a game instance.
+            board: the board game.
 
         Returns:
-            A game with the players swapped is returned.
+            A board with the players swapped is returned.
         """
-        # trasform the game by swapping the players
-        game = deepcopy(game)
-        tmp = game._board == 0
-        game._board[game._board == 1] = 0
-        game._board[tmp] = 1
+        # trasform the board by swapping the players
+        tmp = board == 0
+        board[board == 1] = 0
+        board[tmp] = 1
 
-        return game
+        return board

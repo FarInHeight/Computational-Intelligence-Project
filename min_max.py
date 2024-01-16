@@ -112,22 +112,20 @@ class MinMaxPlayer(Player):
 
         return max_value - min_value
 
-    def max_value(self, game: 'InvestigateGame', depth: int) -> int | float:
+    def max_value(self, game: 'InvestigateGame', key: int, depth: int) -> int | float:
         """
         Perform a recursive traversal of the adversarial search tree
         for the Max player to a maximum depth.
 
         Args:
             game: the current game state;
+            key: the current game state representation;
             depth: the current depth in the search tree.
 
         Returns:
             The evaluation function value of the best move to play
             for Max is returned.
         """
-        # get hashable state
-        key = game.get_hashable_state(self._player_id)
-
         # check if this max_value is already in hash table
         if key in self._visited_max_states and depth <= self._visited_max_states[key].depth:
             self._hit += 1
@@ -150,30 +148,28 @@ class MinMaxPlayer(Player):
             else game.generate_possible_transitions(self._player_id)
         )
         # for each possible game transitions
-        for _, state in transitions:
+        for _, state, key in transitions:
             # update the current max value
-            value = max(value, self.min_value(state, depth - 1))
+            value = max(value, self.min_value(state, key, depth - 1))
 
         # save max_value in hash_table
         self._visited_max_states[key] = EntryMinMax(depth, value)
         return value
 
-    def min_value(self, game: 'InvestigateGame', depth: int) -> int | float:
+    def min_value(self, game: 'InvestigateGame', key: int, depth: int) -> int | float:
         """
         Perform a recursive traversal of the adversarial search tree
         for the Min player to a maximum depth.
 
         Args:
             game: the current game state;
+            key: the current game state representation;
             depth: the current depth in the search tree.
 
         Returns:
             The evaluation function value of the best move to play
             for Min is returned.
         """
-        # get hashable state
-        key = game.get_hashable_state(self._player_id)
-
         # check if this max_value is already in hash table
         if key in self._visited_min_states and depth <= self._visited_min_states[key].depth:
             self._hit += 1
@@ -196,9 +192,9 @@ class MinMaxPlayer(Player):
             else game.generate_possible_transitions(self._opponent_player_id)
         )
         # for each possible game transitions
-        for _, state in transitions:
+        for _, state, key in transitions:
             # update the current min value
-            value = min(value, self.max_value(state, depth - 1))
+            value = min(value, self.max_value(state, key, depth - 1))
 
         # save min_value in hash_table
         self._visited_min_states[key] = EntryMinMax(depth, value)
@@ -223,9 +219,9 @@ class MinMaxPlayer(Player):
             else game.generate_possible_transitions(self._player_id)
         )
         # for all possible actions and result states
-        actions, states = zip(*transitions)
+        actions, states, keys = zip(*transitions)
         # return the action corresponding to the best estimated move
-        _, action = max(enumerate(actions), key=lambda t: self.min_value(states[t[0]], self._depth - 1))
+        _, action = max(enumerate(actions), key=lambda x: self.min_value(states[x[0]], keys[x[0]], self._depth - 1))
         # return it
         return action
 
@@ -277,7 +273,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         super().__init__(player_id, depth, symmetries)
 
     def max_value(
-        self, game: 'Game', depth: int, alpha: float, beta: float
+        self, game: 'Game', key: int, depth: int, alpha: float, beta: float
     ) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
         """
         Perform a recursive traversal of the adversarial search tree
@@ -287,6 +283,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
 
         Args:
             game: the current game state;
+            key: the current game state representation;
             depth: the current depth in the search tree;
             alpha: the best value among all Max ancestors;
             beta: the best value among all Min ancestors.
@@ -295,10 +292,6 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             The evaluation function value of the best move to play
             for Max and the move itsef are returned.
         """
-
-        # get hashable state
-        key = game.get_hashable_state(self._player_id)
-
         # check if this max_value is already in hash table
         if key in self._visited_max_states and depth <= self._visited_max_states[key].depth:
             self._hit += 1
@@ -322,9 +315,9 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             else game.generate_possible_transitions(self._player_id)
         )
         # for each possible game transitions
-        for _, state in transitions:
+        for _, state, key in transitions:
             # play as Min
-            value = self.min_value(state, depth - 1, alpha, beta)
+            value = self.min_value(state, key, depth - 1, alpha, beta)
             # if we find a better value
             if value > best_value:
                 # update the current max value
@@ -343,7 +336,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         return best_value
 
     def min_value(
-        self, game: 'Game', depth: int, alpha: float, beta: float
+        self, game: 'Game', key: int, depth: int, alpha: float, beta: float
     ) -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
         """
         Perform a recursive traversal of the adversarial search tree
@@ -353,6 +346,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
 
         Args:
             game: the current game state;
+            key: the current game state representation;
             depth: the current depth in the search tree;
             alpha: the best value among all Max ancestors;
             beta: the best value among all Min ancestors.
@@ -361,9 +355,6 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             The evaluation function value of the best move to play
             for Min and the move itsef are returned.
         """
-        # get hashable state
-        key = game.get_hashable_state(self._player_id)
-
         # check if this max_value is already in hash table
         if key in self._visited_min_states and depth <= self._visited_min_states[key].depth:
             self._hit += 1
@@ -387,9 +378,9 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             else game.generate_possible_transitions(self._opponent_player_id)
         )
         # for each possible game transitions
-        for _, state in transitions:
+        for _, state, key in transitions:
             # play as Max
-            value = self.max_value(state, depth - 1, alpha, beta)
+            value = self.max_value(state, key, depth - 1, alpha, beta)
             # if we find a better value
             if value < best_value:
                 # update the current min value
@@ -426,10 +417,11 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             else game.generate_possible_transitions(self._player_id)
         )
         # for all possible actions and result states
-        actions, states = zip(*transitions)
+        actions, states, keys = zip(*transitions)
         # return the action corresponding to the best estimated move
         _, action = max(
-            enumerate(actions), key=lambda t: self.min_value(states[t[0]], self._depth - 1, float('-inf'), float('inf'))
+            enumerate(actions),
+            key=lambda t: self.min_value(states[t[0]], keys[t[0]], self._depth - 1, float('-inf'), float('inf')),
         )
         # return it
         return action
@@ -451,6 +443,6 @@ if __name__ == '__main__':
         print(f'Percentage of wins player {idx}: {wins/num_games:%}')
 
     print(f'AlphaBetaMinMax as first')
-    test(AlphaBetaMinMaxPlayer(0, depth=2), RandomPlayer(), 1_00, 0)
+    test(AlphaBetaMinMaxPlayer(0, depth=4, symmetries=True), RandomPlayer(), 1_00, 0)
     print(f'AlphaBetaMinMax as second')
-    test(RandomPlayer(), AlphaBetaMinMaxPlayer(1, depth=2), 1_00, 1)
+    test(RandomPlayer(), AlphaBetaMinMaxPlayer(1, depth=4, symmetries=True), 1_00, 1)
