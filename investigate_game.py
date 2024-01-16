@@ -102,14 +102,12 @@ class InvestigateGame(Game):
         # map the trasformed_state to an integer in base 3
         return int(''.join(str(_) for _ in state._board.flatten()) + str(player_id), base=3)
 
-    def generate_possible_transitions(
-        self, player_id: int
-    ) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
+    def generate_possible_transitions(self) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
         '''
         Generate all possible game transitions that a given player can make.
 
         Args:
-            player_id: the player's id.
+            None.
 
         Returns:
             A list of 3-length tuples of actions, corresponding game states and their
@@ -123,24 +121,22 @@ class InvestigateGame(Game):
             state = deepcopy(self)
             action = (from_pos, slide)
             # perfom the move (note: _Game__move is necessary due to name mangling)
-            ok = state._Game__move(from_pos, slide, player_id)
+            ok = state._Game__move(from_pos, slide, self.current_player_idx)
             # if it is valid
             if ok:
                 # update the current player index
                 state.current_player_idx = 1 - state.current_player_idx
                 # append to the list of possible transitions
-                transitions.append((action, state, state.get_hashable_state(player_id)))
+                transitions.append((action, state, state.get_hashable_state(self.current_player_idx)))
 
         return transitions
 
-    def generate_canonical_transitions(
-        self, player_id: int
-    ) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
+    def generate_canonical_transitions(self) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
         '''
         Generate all possible game transitions that a given player can make.
 
         Args:
-            player_id: the player's id.
+            None.
 
         Returns:
             A list of pairs of actions and corresponding game states
@@ -156,21 +152,98 @@ class InvestigateGame(Game):
             state = deepcopy(self)
             action = (from_pos, slide)
             # perfom the move (note: _Game__move is necessary due to name mangling)
-            ok = state._Game__move(from_pos, slide, player_id)
+            ok = state._Game__move(from_pos, slide, self.current_player_idx)
             # if it is valid
             if ok:
-                # update the current player index
-                state.current_player_idx = 1 - state.current_player_idx
                 # get the equivalent canonical state
-                canonical_state = Symmetry.get_canonical_state(state, player_id)
+                canonical_state = Symmetry.get_canonical_state(state, self.current_player_idx)
                 # if it is a new canonical state
                 if canonical_state not in canonical_states:
+                    # update the current player index
+                    state.current_player_idx = 1 - state.current_player_idx
                     # append to the list of possible transitions
                     transitions.append((action, state, canonical_state))
                     # appent to the list of canonical states
                     canonical_states.add(canonical_state)
 
         return transitions
+
+    def evaluation_function(self, player_id: int, enhance: bool = False) -> int | float:
+        """
+        Given the current state of the game, a static evaluation is performed
+        and it is determined if the current position is an advantageous one
+        for the Chosen Player or the Opponent player.
+        Values greater than zero indicate that Chosen Player will probably win,
+        zero indicates a balanced situation and values lower than
+        zero indicate that Opponent Player will probably win.
+        The value is calculated as:
+        (number of complete rows, columns, or diagonals that are still open
+        for chosen Player) - (number of complete rows, columns, or diagonals that are
+        still open for Opponent Player)
+
+        Args:
+            game: the current game state;
+            player_id: the player's id.
+            enhance: choose whether to weight a row according to the number of items taken.
+
+        Return:
+            An estimate value of how much a chosen Player is winning
+            or losing is returned.
+        """
+
+        # check if the game is over
+        value = self.check_winner()
+        # take the max player id
+        current_player = player_id
+        # take the min player id
+        opponent_player = 1 - player_id
+
+        # if max wins return +inf
+        if value == current_player:
+            return float('inf')
+        # if min wins return -inf
+        elif value == opponent_player:
+            return float('-inf')
+
+        # turn each player id into a type compatible with the game board
+        current_player = np.int16(current_player)
+        opponent_player = np.int16(opponent_player)
+
+        # define the max value
+        max_value = 0
+        # define the min value
+        min_value = 0
+        # get the board
+        board = self.get_board()
+
+        # define which board lines to examinate
+        lines = (
+            # take all rows
+            [board[y, :] for y in range(board.shape[0])]
+            # take all columns
+            + [board[:, x] for x in range(board.shape[1])]
+            # take the principal diagonal
+            + [[board[y, y] for y in range(board.shape[0])]]
+            # take the secondary diagonal
+            + [[board[y, -(y + 1)] for y in range(board.shape[0])]]
+        )
+
+        # for each board line
+        for line in lines:
+            # count the taken pieces by max
+            max_taken = (line == current_player).sum()
+            # count the taken pieces by min
+            min_taken = (line == opponent_player).sum()
+            # if all the pieces are neutral or belong to the max player
+            if min_taken == 0 and max_taken > 0:
+                # increment the max value
+                max_value += max_taken if enhance else 1
+            # if all the pieces are neutral or belong to the min player
+            if max_taken == 0 and min_taken > 0:
+                # increment the min value
+                min_value += min_taken if enhance else 1
+
+        return max_value - min_value
 
     def play(
         self,
