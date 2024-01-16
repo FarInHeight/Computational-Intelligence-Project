@@ -79,7 +79,7 @@ class Symmetry:
     }
 
     @classmethod
-    def get_canonical_state(cls, game: 'InvestigateGame', player_id: int = None) -> str:
+    def get_canonical_state(cls, game: 'InvestigateGame', player_id: int = None) -> int:
         '''
         Apply all possible transformations to the state and return the canonical state representation.
         To compute all equivalent states, apply:
