@@ -137,6 +137,46 @@ class InvestigateGame(Game):
         self, player_id: int
     ) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
         '''
+        Generate all possible game transitions that a given player can make.
+
+        Args:
+            player_id: the player's id.
+
+        Returns:
+            A list of pairs of actions and corresponding game states
+            is returned.
+        '''
+        # define a list of possible transitions
+        transitions = []
+        # define a list of canonical states
+        canonical_states = []
+        # for each piece position
+        for from_pos, slide in POSSIBLE_MOVES:
+            # make a copy of the current game state
+            state = deepcopy(self)
+            action = (from_pos, slide)
+            # perfom the move (note: _Game__move is necessary due to name mangling)
+            ok = state._Game__move(from_pos, slide, player_id)
+            # if it is valid
+            if ok:
+                canonical_state = min(
+                    [
+                        trasformed_state.get_hashable_state(player_id)
+                        for trasformed_state in Symmetry.get_transformed_states(state)
+                    ]
+                )
+                if canonical_state not in canonical_states:
+                    # append to the list of possible transitions
+                    transitions.append((action, state, canonical_state))
+                    # appent to the list of canonical states
+                    canonical_states.append(canonical_state)
+
+        return transitions
+
+    def generate_canonical_transitions2(
+        self, player_id: int
+    ) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
+        '''
         Generate all possible game transitions that a given player can make considering the canonical states.
 
         Args:

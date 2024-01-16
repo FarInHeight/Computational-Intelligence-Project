@@ -145,7 +145,7 @@ class MonteCarloRLPlayer(Player):
         # perform eploitation, otherwise
         else:
             # take the action with min return of rewards of the oppenent
-            transition = max(transitions, key=lambda t: self._state_values[t[1].get_hashable_state()])
+            transition = max(transitions, key=lambda t: self._state_values[t[1].get_hashable_state(player_id)])
 
         return transition
 
@@ -166,9 +166,9 @@ class MonteCarloRLPlayer(Player):
         # get all possible transitions
         transitions = game.generate_possible_transitions(player_id)
         # if one of the following states is known
-        if any([t[1].get_hashable_state() in self._state_values for t in transitions]):
+        if any([t[1].get_hashable_state(player_id) in self._state_values for t in transitions]):
             # take the action with min return of rewards of the oppenent
-            action, _ = max(transitions, key=lambda t: self._state_values[t[1].get_hashable_state()])
+            action, _ = max(transitions, key=lambda t: self._state_values[t[1].get_hashable_state(player_id)])
         else:
             # choose a random action
             action, _ = choice(transitions)
@@ -273,19 +273,15 @@ class MonteCarloRLPlayer(Player):
                 np.exp(-self._exploration_decay_rate * episode), self._min_exploration_rate, 1
             )
 
-            # delete last tuple in trajectory
-            trajectory.pop()
             # get the game reward
             reward = self._game_reward(player, winner)
-            # update the trajectory
-            trajectory.append(state_repr_index)
             # update the rewards history
             self._rewards.append(reward)
             # update the state-values function
             self._update_state_values(trajectory, reward)
 
             pbar_episodes.set_description(
-                f"# current mean rewards: {sum(self._rewards) / (episode+1):.2f} - # explored states: {len(self._state_values):,} - Current exploration rate: {self._exploration_rate:2f}"
+                f"# last 1_000 episodes mean reward: {sum(self._rewards[-1_000:]) / 1_000:.2f} - # explored states: {len(self._state_values):,} - Current exploration rate: {self._exploration_rate:2f}"
             )
 
         print(f'** Last 1_000 episodes - Mean rewards value: {sum(self._rewards[-1_000:]) / 1_000:.2f} **')
