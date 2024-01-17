@@ -2,8 +2,7 @@ import numpy as np
 import time
 from game import Game, Move, Player
 from investigate_game import InvestigateGame
-from dataclasses import dataclass
-import pickle
+from random_player import RandomPlayer
 from random import choice
 
 
@@ -15,11 +14,17 @@ class NodeMCT:
         self.n_games = 0
         self.children = None
 
+    def is_terminal(self):
+        return self.state.check_winner() != -1
+
 
 class MCTSPlayer(Player):
-    def __init__(self, n_simulations: int = 300, symmetries: bool = False) -> None:
+    def __init__(self, n_simulations: int = 300, symmetries: bool = False, random: bool = False) -> None:
         self._n_simulations = n_simulations
         self._symmetries = symmetries
+        self._random = random
+        self._calls = 0
+        self._random_player = RandomPlayer()
 
     @classmethod
     def ucb(cls, node: NodeMCT, C=1.4):
@@ -36,12 +41,13 @@ class MCTSPlayer(Player):
             return node
 
     def _expand(self, node: NodeMCT):
-        if not node.children and node.state.check_winner() == -1:
+        if not node.children and not node.is_terminal():
             transitions = (
-                node.state.generate_canonical_transitions(node.state.get_current_player())
+                node.state.generate_canonical_transitions()
                 if self._symmetries
-                else node.state.generate_possible_transitions(node.state.get_current_player())
+                else node.state.generate_possible_transitions()
             )
+            self._calls += 1
             node.children = {action: NodeMCT(state=next_state, parent=node) for action, next_state, _ in transitions}
 
         return self._select(node)
@@ -49,13 +55,25 @@ class MCTSPlayer(Player):
     def _simulate(self, state: InvestigateGame):
         player_id = state.get_current_player()
 
-        while state.check_winner() == -1:
-            transitions = (
-                state.generate_canonical_transitions(state.get_current_player())
-                if self._symmetries
-                else state.generate_possible_transitions(state.get_current_player())
-            )
-            _, state, _ = choice(transitions)
+        max_depth = 50
+        while state.check_winner() == -1 and max_depth > 0:
+            if self._random:
+                ok = False
+                while not ok:
+                    from_pos, slide = self._random_player.make_move(state)
+                    ok = state._Game__move(from_pos, slide, state.get_current_player())
+            else:
+                transitions = (
+                    state.generate_canonical_transitions()
+                    if self._symmetries
+                    else state.generate_possible_transitions()
+                )
+                self._calls += 1
+                _, state, _ = max(transitions, key=lambda x: x[1].evaluation_function(player_id))
+            max_depth -= 1
+
+        if max_depth == 0:
+            print('Loop')
 
         if player_id == state.check_winner():
             return -1
@@ -104,7 +122,11 @@ if __name__ == '__main__':
     # print(f'MCTSPlayer as second')
     # test(RandomPlayer(), MCTSPlayer(), 3, 1)
 
-    print(f'MCTSPlayer as first with symmetries')
-    test(MCTSPlayer(symmetries=False), RandomPlayer(), 3, 0)
-    print(f'MCTSPlayer as second with symmetries')
-    test(RandomPlayer(), MCTSPlayer(symmetries=False), 3, 1)
+    print(f'MCTSPlayer as first')
+    test(MCTSPlayer(50, random=False), RandomPlayer(), 3, 0)
+    print(f'MCTSPlayer as second')
+    test(RandomPlayer(), MCTSPlayer(50, random=False), 3, 1)
+    """ player = MCTSPlayer(50, random=False)
+    Game().play(player, RandomPlayer())
+    print(player._calls)
+ """

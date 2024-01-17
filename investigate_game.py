@@ -95,12 +95,8 @@ class InvestigateGame(Game):
         Returns:
             An integer representation of the state is returned
         '''
-        # copy of the state
-        state = deepcopy(self)
-        # change not taken tiles values to 0
-        state._board += 1
         # map the trasformed_state to an integer in base 3
-        return int(''.join(str(_) for _ in state._board.flatten()) + str(player_id), base=3)
+        return int(''.join(str(_) for _ in (state._board + 1).flatten()) + str(player_id), base=3)
 
     def generate_possible_transitions(self) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
         '''
