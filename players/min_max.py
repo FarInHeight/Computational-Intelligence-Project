@@ -1,7 +1,5 @@
-import numpy as np
-import time
 from game import Game, Move, Player
-from investigate_game import InvestigateGame
+from utils.investigate_game import InvestigateGame
 import pickle
 from collections import namedtuple
 from joblib import Parallel, delayed
@@ -348,7 +346,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
 
 if __name__ == '__main__':
     from tqdm import trange
-    from random_player import RandomPlayer
+    from players.random_player import RandomPlayer
 
     def test(player1, player2, num_games, idx):
         wins = 0

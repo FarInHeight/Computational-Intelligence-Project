@@ -2,7 +2,7 @@ from game import Game, Move, Player
 from copy import deepcopy
 from itertools import product
 from typing import Literal, Any
-from symmetry import Symmetry
+from utils.symmetry import Symmetry
 import numpy as np
 from collections import defaultdict
 
@@ -95,8 +95,9 @@ class InvestigateGame(Game):
         Returns:
             An integer representation of the state is returned
         '''
+
         # map the trasformed_state to an integer in base 3
-        return int(''.join(str(_) for _ in (state._board + 1).flatten()) + str(player_id), base=3)
+        return int(''.join(str(_) for _ in (self._board + 1).flatten()) + str(player_id), base=3)
 
     def generate_possible_transitions(self) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
         '''

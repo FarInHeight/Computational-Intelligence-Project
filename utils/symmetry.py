@@ -94,6 +94,7 @@ class Symmetry:
 
         Args:
             game: a game instance;
+            player_id: the player's id.
 
         Returns:
             The canonical state representation is returned.
