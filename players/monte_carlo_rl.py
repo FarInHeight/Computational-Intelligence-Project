@@ -12,7 +12,7 @@ from players.min_max import MinMaxPlayer
 
 class MonteCarloRLPlayer(Player):
     """
-    Class representing player who learns to play thanks to the Monte Carlo-learning technique.
+    Class representing a player who learns to play thanks to the Monte Carlo-learning technique.
     """
 
     def __init__(
@@ -32,7 +32,8 @@ class MonteCarloRLPlayer(Player):
 
         Args:
             n_episodes: the number of episodes for the training phase;
-            gamma: the discount rate of the Bellman equation;
+            gamma: the discount rate;
+            alpha: how much information to incorporate from the new experience;
             min_exploration_rate: the minimum rate for exploration during the training phase;
             exploration_decay_rate: the exploration decay rate used during the training;
             minmax: decide if the training must be performed also on minmax.
@@ -44,9 +45,9 @@ class MonteCarloRLPlayer(Player):
             None.
         """
         super().__init__()
-        self._state_values = MissNoAddDict(float)  # define the State-value function
+        self._state_values = MissNoAddDict(float)  # define the State-Value function
         self._n_episodes = n_episodes  # define the number of episodes for the training phase
-        self._gamma = gamma  # define the discount rate of the Bellman equation
+        self._gamma = gamma  # define the discount rate
         self._alpha = alpha  # define how much information to incorporate from the new experience
         self._exploration_rate = 1  # define the exploration rate for the training phase
         self._min_exploration_rate = (
@@ -58,7 +59,7 @@ class MonteCarloRLPlayer(Player):
         self._minmax = minmax  # define if we want to play also against minmax
         self._switch_ratio = switch_ratio  # define the moment in which minmax plays against us
         self._depth = depth  # define the depth for minmax
-        self._symmetries = symmetries  # choose if play symmetries should be considered
+        self._symmetries = symmetries  # choose if symmetries should be taken into account
         self._rewards = []  # list of the rewards obtained during training
 
     @property
@@ -87,7 +88,7 @@ class MonteCarloRLPlayer(Player):
         """
         # if no one wins
         if winner == -1:
-            # return small penalty
+            # return a small penalty
             return -1
         # if the agent is the winner
         if self == player:
@@ -98,7 +99,7 @@ class MonteCarloRLPlayer(Player):
 
     def _update_state_values(self, trajectory: list, reward: float) -> None:
         """
-        Update the Q_table according to the Monte Carlo-learning technique.
+        Update the State-Value function according to the Monte Carlo-learning technique.
 
         Args:
             trajectory: the trajectory of the current episode;
@@ -111,7 +112,7 @@ class MonteCarloRLPlayer(Player):
         return_of_rewards = reward
         # for each state in the trajectory
         for state_repr_index in reversed(trajectory):
-            # update the state-value mapping table
+            # update the State-Value mapping table
             self._state_values[state_repr_index] = self._state_values[state_repr_index] + self._alpha * (
                 self._gamma * return_of_rewards - self._state_values[state_repr_index]
             )
@@ -123,7 +124,7 @@ class MonteCarloRLPlayer(Player):
         player_id: int,
     ) -> tuple[tuple[tuple[int, int], Move], 'InvestigateGame']:
         """
-        Construct a move during the training phase to update the Q_table.
+        Construct a move during the training phase to update the State-Value function.
 
         Args:
             game: a game instance;
@@ -142,14 +143,14 @@ class MonteCarloRLPlayer(Player):
             transition = choice(transitions)
         # perform eploitation, otherwise
         else:
-            # take the action with min return of rewards of the oppenent
+            # take the action with maximum return of rewards
             transition = max(transitions, key=lambda t: self._state_values[t[2]])
 
         return transition
 
     def make_move(self, game: 'Game') -> tuple[tuple[int, int], Move]:
         """
-        Construct a move to be played according to the State-valus.
+        Construct a move to be played according to the State-Value function.
 
         Args:
             game: a game instance.
@@ -161,7 +162,7 @@ class MonteCarloRLPlayer(Player):
         game = InvestigateGame(game)
         # get all possible canonical transitions
         transitions = game.generate_canonical_transitions()
-        # take the action with min return of rewards of the oppenent
+        # take the action with maximum return of rewards
         action, _, _ = max(transitions, key=lambda t: self._state_values[t[2]])
 
         # return the action
@@ -181,12 +182,12 @@ class MonteCarloRLPlayer(Player):
 
         # define how many episodes to run
         pbar_episodes = trange(self._n_episodes)
-        # define the random tuples
+        # define the players
         players = self, RandomPlayer()
 
         # if we want to play also against minmax
         if self._minmax:
-            # define the minmax players
+            # define a new players tuple
             minmax_players = self, MinMaxPlayer(depth=1, symmetries=self._symmetries, enhance=True)
 
         # for each episode
@@ -238,7 +239,7 @@ class MonteCarloRLPlayer(Player):
                         # reset the counter
                         counter = 0
 
-                # if it is the opponent turn
+                # if it is the opponent's turn
                 else:
                     # define a variable to check if the chosen move is ok or not
                     ok = False
@@ -263,7 +264,7 @@ class MonteCarloRLPlayer(Player):
             reward = self._game_reward(player, winner)
             # update the rewards history
             self._rewards.append(reward)
-            # update the state-values function
+            # update the State-Value function
             self._update_state_values(trajectory, reward)
 
             pbar_episodes.set_description(
@@ -288,7 +289,7 @@ class MonteCarloRLPlayer(Player):
 
     def load(self, path: str) -> None:
         """
-        Load a Monte Carlo earning player's state into the current player.
+        Load a Monte Carlo learning player's state into the current player.
 
         Args:
             path: location from which to load the player's state.
@@ -301,9 +302,9 @@ class MonteCarloRLPlayer(Player):
 
 
 if __name__ == '__main__':
-    # create the
+    # create the player
     monte_carlo_rl_agent = MonteCarloRLPlayer()
-    # train the
+    # train the player
     monte_carlo_rl_agent.train(max_steps_draw=10)
-    # serialize the
+    # serialize the player
     monte_carlo_rl_agent.save('agents/monte_carlo_rl_agent_no_sim2.pkl')

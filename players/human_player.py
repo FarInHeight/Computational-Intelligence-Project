@@ -38,7 +38,17 @@ class HumanPlayer(Player):
         # return the chosen move
         return action
 
-    def __get_input(self, game: 'Game'):
+    def __get_input(self, game: 'Game') -> tuple[bool, tuple[tuple[int, int], Move] | None]:
+        """
+        Ask the user to enter a move.
+
+        Args:
+            game: a game instance.
+
+        Return:
+            A boolean value to determine whether an input is OK and t
+            he input itself is returned.
+        """
         # get the current board
         board = game.get_board()
         # set the move as invalid
@@ -67,7 +77,7 @@ class HumanPlayer(Player):
                     slide = self.__slides[input('Choose a slide in {"r", "l", "t", "b"}: ')]
                     # save the chosen move
                     valid, action = True, ((x, y), slide)
-        # if the user chooses a non-integer value of x or y
+        # if the user chooses a non-integer value for x or y
         except ValueError:
             # print a descriptive message
             print('Invalid non-integer value.')
@@ -75,9 +85,9 @@ class HumanPlayer(Player):
         except KeyError:
             # print a descriptive message
             print('Invalid slide value.')
-        # if the user's input is ok
+        # at the end
         finally:
-            # return the chosen move
+            # return the chosen move or the invalid move
             return valid, action
 
 

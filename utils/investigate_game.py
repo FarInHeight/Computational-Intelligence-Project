@@ -13,29 +13,43 @@ for from_pos in set(product([0, 4], range(Game()._board.shape[0]))).union(
 ):
     # create a list of possible slides
     slides = list(Move)
-    # shuffle(slides)
     # for each slide
     for slide in slides:
         # make a copy of the current game state
         state = deepcopy(Game())
+        # create an action
         action = (from_pos, slide)
-        # perfom the move (note: _Game__move is necessary due to name mangling)
+        # perfom the action (note: _Game__move is necessary due to name mangling)
         ok = state._Game__move(from_pos, slide, 0)
-        # if it is valid
+        # if it is a valid action
         if ok:
-            # append to the list of possible transitions
+            # append to the list of possible moves
             POSSIBLE_MOVES.append(action)
 
 
 class MissNoAddDict(defaultdict):
+    """
+    Class extending defaultdict to not add a new key if it is not present.
+    """
+
     def __missing__(self, __key: Any) -> Any:
+        """
+        If the key is missing, don't create a new dictionary entry
+        and return the default value.
+
+        Args:
+            __key: the key used to index the dictionary.
+
+        Returns:
+            The default factory value is returned.
+        """
         return self.default_factory()
 
 
 class InvestigateGame(Game):
     '''
     Class representing an extension of the Game class which
-    is used by the Min-Man players to construct the search tree.
+    is used by the players to simulate the game or to train them.
     '''
 
     def __init__(self, game: 'Game') -> None:
@@ -73,7 +87,7 @@ class InvestigateGame(Game):
             # go to the beginning of the next line
             print()
 
-    def __eq__(self, other) -> bool:
+    def __eq__(self, other: 'InvestigateGame') -> bool:
         '''
         Equality check for the class. Games are equal if the boards are equal.
 
@@ -93,15 +107,14 @@ class InvestigateGame(Game):
            player_id: the player's id.
 
         Returns:
-            An integer representation of the state is returned
+            An integer representation of the state is returned.
         '''
-
-        # map the trasformed_state to an integer in base 3
+        # map the game state to an integer in base 3
         return int(''.join(str(_) for _ in (self._board + 1).flatten()) + str(player_id), base=3)
 
     def generate_possible_transitions(self) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
         '''
-        Generate all possible game transitions that a given player can make.
+        Generate all possible game transitions that the current player can make.
 
         Args:
             None.
@@ -116,10 +129,11 @@ class InvestigateGame(Game):
         for from_pos, slide in POSSIBLE_MOVES:
             # make a copy of the current game state
             state = deepcopy(self)
+            # create an action
             action = (from_pos, slide)
-            # perfom the move (note: _Game__move is necessary due to name mangling)
+            # perfom the action (note: _Game__move is necessary due to name mangling)
             ok = state._Game__move(from_pos, slide, self.current_player_idx)
-            # if it is valid
+            # if it is a valid action
             if ok:
                 # update the current player index
                 state.current_player_idx = 1 - state.current_player_idx
@@ -130,14 +144,16 @@ class InvestigateGame(Game):
 
     def generate_canonical_transitions(self) -> list[tuple[tuple[tuple[int, int], Move], 'InvestigateGame']]:
         '''
-        Generate all possible game transitions that a given player can make.
+        Generate all possible canonical game transitions that the current player can make.
+        All transitions that have the same canonical representation of the resulting game
+        state are not returned.
 
         Args:
             None.
 
         Returns:
-            A list of pairs of actions and corresponding game states
-            is returned.
+            A list of 3-length tuples of actions, corresponding game states and their
+            canonical representations is returned.
         '''
         # define a list of possible transitions
         transitions = []
@@ -147,10 +163,11 @@ class InvestigateGame(Game):
         for from_pos, slide in POSSIBLE_MOVES:
             # make a copy of the current game state
             state = deepcopy(self)
+            # create an action
             action = (from_pos, slide)
-            # perfom the move (note: _Game__move is necessary due to name mangling)
+            # perfom the action (note: _Game__move is necessary due to name mangling)
             ok = state._Game__move(from_pos, slide, self.current_player_idx)
-            # if it is valid
+            # if it is a valid action
             if ok:
                 # get the equivalent canonical state
                 canonical_state = Symmetry.get_canonical_state(state, self.current_player_idx)
@@ -160,7 +177,7 @@ class InvestigateGame(Game):
                     state.current_player_idx = 1 - state.current_player_idx
                     # append to the list of possible transitions
                     transitions.append((action, state, canonical_state))
-                    # appent to the list of canonical states
+                    # appens to the list of canonical states
                     canonical_states.add(canonical_state)
 
         return transitions
@@ -175,7 +192,7 @@ class InvestigateGame(Game):
         zero indicate that Opponent Player will probably win.
         The value is calculated as:
         (number of complete rows, columns, or diagonals that are still open
-        for chosen Player) - (number of complete rows, columns, or diagonals that are
+        for Chosen Player) - (number of complete rows, columns, or diagonals that are
         still open for Opponent Player)
 
         Args:
@@ -184,21 +201,21 @@ class InvestigateGame(Game):
             enhance: choose whether to weight a row according to the number of items taken.
 
         Return:
-            An estimate value of how much a chosen Player is winning
+            An estimate value of how much a Chosen Player is winning
             or losing is returned.
         """
 
         # check if the game is over
         value = self.check_winner()
-        # take the max player id
+        # take the current player id
         current_player = player_id
-        # take the min player id
+        # take the opponent player id
         opponent_player = 1 - player_id
 
-        # if max wins return +inf
+        # if the current player wins return +inf
         if value == current_player:
             return float('inf')
-        # if min wins return -inf
+        # if opponent player wins return -inf
         elif value == opponent_player:
             return float('-inf')
 
@@ -206,14 +223,14 @@ class InvestigateGame(Game):
         current_player = np.int16(current_player)
         opponent_player = np.int16(opponent_player)
 
-        # define the max value
-        max_value = 0
-        # define the min value
-        min_value = 0
+        # define the current player's value
+        current_player_value = 0
+        # define the opponent player's value
+        opponent_player_value = 0
         # get the board
         board = self.get_board()
 
-        # define which board lines to examinate
+        # define which board lines to examine
         lines = (
             # take all rows
             [board[y, :] for y in range(board.shape[0])]
@@ -227,20 +244,20 @@ class InvestigateGame(Game):
 
         # for each board line
         for line in lines:
-            # count the taken pieces by max
-            max_taken = (line == current_player).sum()
-            # count the taken pieces by min
-            min_taken = (line == opponent_player).sum()
-            # if all the pieces are neutral or belong to the max player
-            if min_taken == 0 and max_taken > 0:
-                # increment the max value
-                max_value += max_taken if enhance else 1
-            # if all the pieces are neutral or belong to the min player
-            if max_taken == 0 and min_taken > 0:
-                # increment the min value
-                min_value += min_taken if enhance else 1
+            # count the taken pieces by the current player
+            current_player_taken = (line == current_player).sum()
+            # count the taken pieces by the opponent player
+            opponent_player_taken = (line == opponent_player).sum()
+            # if all the pieces are neutral or belong to the current player
+            if opponent_player_taken == 0 and current_player_taken > 0:
+                # increment the current player's value
+                current_player_value += current_player_taken if enhance else 1
+            # if all the pieces are neutral or belong to the opponent player
+            if current_player_taken == 0 and opponent_player_taken > 0:
+                # increment the opponent player's value
+                opponent_player_value += opponent_player_taken if enhance else 1
 
-        return max_value - min_value
+        return current_player_value - opponent_player_value
 
     def play(
         self,
@@ -254,7 +271,6 @@ class InvestigateGame(Game):
         Args:
             player1: the player who starts the game;
             player2: the second player of the game;
-            log: a boolean flag to print the match log or not;
             max_steps_draw: define the maximum number of steps before
                             claiming a draw (avoid looping).
 
@@ -265,7 +281,7 @@ class InvestigateGame(Game):
         '''
         # print beginning of the game
         print('-- BEGINNING OF THE GAME --')
-        # print the boards
+        # print the board
         self.print()
         # define the players
         players = [player1, player2]

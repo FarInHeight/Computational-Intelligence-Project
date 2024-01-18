@@ -5,31 +5,38 @@ from copy import deepcopy
 
 class Symmetry:
     '''
-    Class that handles information about the symmetries of the board
+    Class that handles information about the symmetries of the board.
 
-    canonical_index_trasformation -> transformation
-    0 : identity
-    1 : rot90(  )
-    2 : rot180(  )
-    3 : rot270(  )
-    4 : flipud(  )
-    5 : rot90( flipud(  ) )
-    6 : rot180( flipud(  ) )
-    7 : rot270( flipud(  ) )
-
+    The mapping from index to transformation is the following:
+        0 : identity
+        1 : rot90(  )
+        2 : rot180(  )
+        3 : rot270(  )
+        4 : flipud(  )
+        5 : rot90( flipud(  ) )
+        6 : rot180( flipud(  ) )
+        7 : rot270( flipud(  ) )
     '''
 
+    # define the rotations
     rotations = [lambda x: np.rot90(x, k=1), lambda x: np.rot90(x, k=2), lambda x: np.rot90(x, k=3)]
+    # define the flips
     flips = [lambda x: deepcopy(x), lambda x: np.flipud(x)]
+    # define the swaps
     swaps = [lambda x: deepcopy(x), lambda x: Symmetry.__swap_board_players(x)]
 
+    # define a matrix to indicate relevant directions
     compass = np.array([['', Move.TOP, ''], [Move.LEFT, '', Move.RIGHT], ['', Move.BOTTOM, '']])
+
+    # map a move to indices for the compass
     map_slide_to_compass = {
         Move.TOP: (0, 1),
         Move.LEFT: (1, 0),
         Move.RIGHT: (1, 2),
         Move.BOTTOM: (2, 1),
     }
+
+    # map a slide to a canonical slide
     trasformation_to_canonical_slides = {
         1: np.rot90(compass, k=1),
         2: np.rot90(compass, k=2),
@@ -39,6 +46,8 @@ class Symmetry:
         6: np.rot90(np.flipud(compass), k=2),
         7: np.rot90(np.flipud(compass), k=3),
     }
+
+    # map a canonical slide to a slide
     trasformation_to_non_canonnical_slides = {
         1: np.rot90(compass, k=-1),
         2: np.rot90(compass, k=-2),
@@ -49,6 +58,7 @@ class Symmetry:
         7: np.flipud(np.rot90(compass, k=-3)),
     }
 
+    # define the board positions
     positions = np.array(
         [
             [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)],
@@ -58,6 +68,8 @@ class Symmetry:
             [(0, 4), (1, 4), (2, 4), (3, 4), (4, 4)],
         ]
     )
+
+    # map a position to a canonical position
     trasformation_to_canonical_positions = {
         1: np.rot90(positions, k=1),
         2: np.rot90(positions, k=2),
@@ -68,6 +80,7 @@ class Symmetry:
         7: np.rot90(np.flipud(positions), k=3),
     }
 
+    # map a canonical position to a position
     trasformation_to_non_canonnical_positions = {
         1: np.rot90(positions, k=-1),
         2: np.rot90(positions, k=-2),
@@ -83,13 +96,13 @@ class Symmetry:
         '''
         Apply all possible transformations to the state and return the canonical state representation.
         To compute all equivalent states, apply:
-        - a 90° rotation to the original state;
-        - a 180° rotation to the original state;
-        - a 270° rotation to the original state;
-        - a up/down flip;
-        - a 90° rotation to the flipped state;
-        - a 180° rotation to the flipped state;
-        - a 270° rotation to the flipped state.
+            - a 90° rotation to the original state;
+            - a 180° rotation to the original state;
+            - a 270° rotation to the original state;
+            - a up/down flip;
+            - a 90° rotation to the flipped state;
+            - a 180° rotation to the flipped state;
+            - a 270° rotation to the flipped state.
         These trasformation are applied to the original state and the swapped state.
 
         Args:
@@ -105,25 +118,25 @@ class Symmetry:
 
         # for each swap
         for idx, swap in enumerate(Symmetry.swaps):
-            # copy of the state
+            # copy the state
             swapped_state = deepcopy(game)
             # swap the board
             swapped_state._board = swap(swapped_state._board)
             # for each flip
             for flip in Symmetry.flips:
-                # copy of the state
+                # copy the state
                 flipped_state = deepcopy(swapped_state)
                 # transform the board
                 flipped_state._board = flip(flipped_state._board)
-                # append transformed state
+                # append the transformed state
                 transformed_states.append(flipped_state.get_hashable_state(player_id if idx == 0 else 1 - player_id))
-                # add rotated states
+                # for each rotation
                 for rotate in Symmetry.rotations:
-                    # copy of the state
+                    # copy the state
                     rotated_new_state = deepcopy(flipped_state)
                     # transform the board
                     rotated_new_state._board = rotate(rotated_new_state._board)
-                    # append transformed state
+                    # append the transformed state
                     transformed_states.append(
                         rotated_new_state.get_hashable_state(player_id if idx == 0 else 1 - player_id)
                     )
@@ -139,16 +152,20 @@ class Symmetry:
 
         Args:
             action: the canonical action;
-            transformation_index: the corrisponding index of the trasformation applied.
+            transformation_index: the corresponding index of the applied trasformation.
 
         Returns:
-            The corrisponding action is returned.
+            The corresponding action is returned.
         '''
+        # if no transformation is applied
         if transformation_index == 0:
+            # return the action as it is
             return action
 
+        # unpack the action
         from_pos, slide = action
 
+        # return the transformed action
         return (
             tuple(Symmetry.trasformation_to_canonical_positions[transformation_index][(from_pos[1], from_pos[0])]),
             Symmetry.trasformation_to_canonical_slides[transformation_index][Symmetry.map_slide_to_compass[slide]],
@@ -168,11 +185,14 @@ class Symmetry:
         Returns:
             The corrisponding canonical action is returned.
         '''
+        # if no transformation is applied
         if transformation_index == 0:
             return action
 
+        # unpack the action
         from_pos, slide = action
 
+        # return the transformed action
         return (
             tuple(Symmetry.trasformation_to_non_canonnical_positions[transformation_index][(from_pos[1], from_pos[0])]),
             Symmetry.trasformation_to_non_canonnical_slides[transformation_index][Symmetry.map_slide_to_compass[slide]],
