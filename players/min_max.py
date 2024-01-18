@@ -3,6 +3,9 @@ from utils.investigate_game import InvestigateGame
 import pickle
 from collections import namedtuple
 from joblib import Parallel, delayed
+from tqdm import trange
+from players.random_player import RandomPlayer
+
 
 EntryMinMax = namedtuple('EntryMinMax', ['depth', 'value'])
 
@@ -12,7 +15,7 @@ class MinMaxPlayer(Player):
     Class representing a player which plays according to the Min-Max algorithm.
     """
 
-    def __init__(self, depth: int = 3, symmetries: bool = False, enhance: bool = False) -> None:
+    def __init__(self, depth: int = 3, symmetries: bool = False, enhance: bool = True) -> None:
         """
         Constructor of the Min-Max player.
 
@@ -25,12 +28,11 @@ class MinMaxPlayer(Player):
             None.
         """
         super().__init__()
+        self._visited = {}
         self._depth = depth
         self._symmetries = symmetries
         self._enhance = enhance
-        self._visited_max_states = {}
-        self._visited_min_states = {}
-        self._hit = 0
+        self._train = False
 
     def max_value(self, game: 'InvestigateGame', key: int, depth: int) -> int | float:
         """
@@ -40,23 +42,22 @@ class MinMaxPlayer(Player):
         Args:
             game: the current game state;
             key: the current game state representation;
-            depth: the current depth in the search tree.
+            depth: the remaining depth in the search tree.
 
         Returns:
             The evaluation function value of the best move to play
             for Max is returned.
         """
-        # check if this max_value is already in hash table
-        if key in self._visited_max_states and depth <= self._visited_max_states[key].depth:
-            self._hit += 1
-            return self._visited_max_states[key].value
+        # check if the state is already in hash table
+        if key in self._visited and depth <= self._visited[key].depth:
+            return self._visited[key].value
 
-        # if there are no more levels to examinate or we are in a terminal state
+        # if there are no more levels to examine or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
-            # get terminal value
+            # get the heuristic value of the state
             value = game.evaluation_function(game.current_player_idx, self._enhance)
-            # save max_value in hash_table
-            self._visited_max_states[key] = EntryMinMax(0, value)
+            # save the state in hash table
+            self._visited[key] = EntryMinMax(0, value)
             # return its heuristic value
             return value
         # set the current best max value
@@ -65,13 +66,13 @@ class MinMaxPlayer(Player):
         transitions = (
             game.generate_canonical_transitions() if self._symmetries else game.generate_possible_transitions()
         )
-        # for each possible game transitions
+        # for each possible game transition
         for _, state, key in transitions:
             # update the current max value
             value = max(value, self.min_value(state, key, depth - 1))
 
-        # save max_value in hash_table
-        self._visited_max_states[key] = EntryMinMax(depth, value)
+        # save the state in hash table
+        self._visited[key] = EntryMinMax(depth, value)
         return value
 
     def min_value(self, game: 'InvestigateGame', key: int, depth: int) -> int | float:
@@ -82,23 +83,22 @@ class MinMaxPlayer(Player):
         Args:
             game: the current game state;
             key: the current game state representation;
-            depth: the current depth in the search tree.
+            depth: the remaining depth in the search tree.
 
         Returns:
             The evaluation function value of the best move to play
             for Min is returned.
         """
-        # check if this max_value is already in hash table
-        if key in self._visited_min_states and depth <= self._visited_min_states[key].depth:
-            self._hit += 1
-            return self._visited_min_states[key].value
+        # check if the state is already in hash table
+        if key in self._visited and depth <= self._visited[key].depth:
+            return self._visited[key].value
 
-        # if there are no more levels to examinate or we are in a terminal state
+        # if there are no more levels to examine or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
-            # get terminal value
+            # get the heuristic value
             value = game.evaluation_function(1 - game.current_player_idx, self._enhance)
-            # save min_value in hash_table
-            self._visited_min_states[key] = EntryMinMax(0, value)
+            # save the state in hash table
+            self._visited[key] = EntryMinMax(0, value)
             # return its heuristic value
             return value
         # set the current best min value
@@ -107,13 +107,13 @@ class MinMaxPlayer(Player):
         transitions = (
             game.generate_canonical_transitions() if self._symmetries else game.generate_possible_transitions()
         )
-        # for each possible game transitions
+        # for each possible game transition
         for _, state, key in transitions:
             # update the current min value
             value = min(value, self.max_value(state, key, depth - 1))
 
-        # save min_value in hash_table
-        self._visited_min_states[key] = EntryMinMax(depth, value)
+        # save the state in hash table
+        self._visited[key] = EntryMinMax(depth, value)
         return value
 
     def make_move(self, game: 'Game') -> tuple[tuple[int, int], Move]:
@@ -128,14 +128,21 @@ class MinMaxPlayer(Player):
         """
         # create seperate instance of a game for investigation
         game = InvestigateGame(game)
-        # get all possible game transitions or canonical transitions
-        transitions = (
-            game.generate_canonical_transitions() if self._symmetries else game.generate_possible_transitions()
-        )
-        # parallelize min_value
-        values = Parallel(n_jobs=-1)(
-            delayed(self.min_value)(state, key, self._depth - 1) for _, state, key in transitions
-        )
+        # get first canonical level
+        transitions = game.generate_canonical_transitions()
+        # if we are not training
+        if not self._train:
+            # parallelize min_value
+            values = Parallel(n_jobs=-1)(
+                delayed(self.min_value)(state, key, self._depth - 1) for _, state, key in transitions
+            )
+        # otherwise
+        else:
+            # parallelize with shared memory to update visited dict (slower)
+            values = Parallel(n_jobs=-1, require='sharedmem')(
+                delayed(self.min_value)(state, key, self._depth - 1) for _, state, key in transitions
+            )
+
         # return the action corresponding to the best estimated move
         _, (action, _, _) = max(
             enumerate(transitions),
@@ -143,6 +150,37 @@ class MinMaxPlayer(Player):
         )
         # return it
         return action
+
+    def train(self, n_games: int = 100) -> None:
+        """
+        Train the MinMax player by updating the hash table.
+
+        Args:
+            n_games: number of games to play against a random player;
+
+        Returns:
+            None.
+        """
+        # set training flag
+        self._train = True
+        # get current number of found states
+        initial_n_states = len(self._visited)
+        # define the players
+        players = self, RandomPlayer()
+        # define how many game to play
+        pbar = trange(n_games)
+        # for each game
+        for _ in pbar:
+            # instantiate the game
+            g = Game()
+            # play the game
+            g.play(*players)
+            # swap the players
+            players = players[1], players[0]
+            pbar.set_description(f"Found states: {len(self._visited):,}")
+        print(f"New found states after {n_games} games: {(len(self._visited) - initial_n_states):,}")
+        # set training flag to false
+        self._train = False
 
     def save(self, path: str) -> None:
         """
@@ -153,7 +191,7 @@ class MinMaxPlayer(Player):
 
         Returns: None.
         """
-        # serialize the Monte Carlo learning player
+        # serialize the MinMax player
         with open(path, 'wb') as f:
             pickle.dump(self.__dict__, f)
 
@@ -166,7 +204,7 @@ class MinMaxPlayer(Player):
 
         Returns: None.
         """
-        # load the serialized Monte Carlo learning player
+        # load the serialized MinMax player
         with open(path, 'rb') as f:
             self.__dict__ = pickle.load(f)
 
@@ -203,26 +241,25 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         Args:
             game: the current game state;
             key: the current game state representation;
-            depth: the current depth in the search tree;
+            depth: the remaining depth in the search tree;
             alpha: the best value among all Max ancestors;
             beta: the best value among all Min ancestors.
 
         Returns:
             The evaluation function value of the best move to play
-            for Max and the move itsef are returned.
+            for Max is returned.
         """
-        # check if this max_value is already in hash table
-        if key in self._visited_max_states and depth <= self._visited_max_states[key].depth:
-            self._hit += 1
-            return self._visited_max_states[key].value
+        # check if the state is already in hash table
+        if key in self._visited and depth <= self._visited[key].depth:
+            return self._visited[key].value
 
-        # if there are no more levels to examinate or we are in a terminal state
+        # if there are no more levels to examine or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
-            # get terminal value
+            # get the heuristic value
             value = game.evaluation_function(game.current_player_idx, self._enhance)
-            # save min_value in hash_table
-            self._visited_max_states[key] = EntryMinMax(0, value)
-            # return its heuristic value and no move
+            # save the state in hash table
+            self._visited[key] = EntryMinMax(0, value)
+            # return its heuristic value
             return value
 
         # set the current best max value
@@ -231,9 +268,8 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         transitions = (
             game.generate_canonical_transitions() if self._symmetries else game.generate_possible_transitions()
         )
-        # for each possible game transitions
+        # for each possible game transition
         for _, state, key in transitions:
-            print(state.current_player_idx)
             # play as Min
             value = self.min_value(state, key, depth - 1, alpha, beta)
             # if we find a better value
@@ -244,13 +280,13 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
                 alpha = max(alpha, best_value)
             # if the value for the best Min ancestor cannot be improved
             if best_value >= beta:
-                # save min_value in hash_table
-                self._visited_max_states[key] = EntryMinMax(depth, best_value)
+                # save the state in hash table
+                self._visited[key] = EntryMinMax(depth, best_value)
                 # terminate the search
                 return best_value
 
-        # save max_value in hash_table
-        self._visited_max_states[key] = EntryMinMax(depth, best_value)
+        # save the state in hash table
+        self._visited[key] = EntryMinMax(depth, best_value)
         return best_value
 
     def min_value(
@@ -265,26 +301,25 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         Args:
             game: the current game state;
             key: the current game state representation;
-            depth: the current depth in the search tree;
+            depth: the remaining depth in the search tree;
             alpha: the best value among all Max ancestors;
             beta: the best value among all Min ancestors.
 
         Returns:
             The evaluation function value of the best move to play
-            for Min and the move itsef are returned.
+            for Min is returned.
         """
-        # check if this max_value is already in hash table
-        if key in self._visited_min_states and depth <= self._visited_min_states[key].depth:
-            self._hit += 1
-            return self._visited_min_states[key].value
+        # check if the state is already in hash table
+        if key in self._visited and depth <= self._visited[key].depth:
+            return self._visited[key].value
 
-        # if there are no more levels to examinate or we are in a terminal state
+        # if there are no more levels to examine or we are in a terminal state
         if depth <= 0 or game.check_winner() != -1:
-            # get terminal value
+            # get the heuristic value
             value = game.evaluation_function(1 - game.current_player_idx, self._enhance)
-            # save min_value in hash_table
-            self._visited_min_states[key] = EntryMinMax(0, value)
-            # return its heuristic value and no move
+            # save the state in hash table
+            self._visited[key] = EntryMinMax(0, value)
+            # return its heuristic value
             return value
 
         # set the current best min value
@@ -293,7 +328,7 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         transitions = (
             game.generate_canonical_transitions() if self._symmetries else game.generate_possible_transitions()
         )
-        # for each possible game transitions
+        # for each possible game transition
         for _, state, key in transitions:
             # play as Max
             value = self.max_value(state, key, depth - 1, alpha, beta)
@@ -305,13 +340,13 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
                 beta = min(beta, best_value)
             # if the value for the best Max ancestor cannot be improved
             if best_value <= alpha:
-                # save min_value in hash_table
-                self._visited_min_states[key] = EntryMinMax(depth, best_value)
+                # save the state in hash table
+                self._visited[key] = EntryMinMax(depth, best_value)
                 # terminate the search
                 return best_value
 
-        # save min_value in hash_table
-        self._visited_min_states[key] = EntryMinMax(depth, best_value)
+        # save the state in hash table
+        self._visited[key] = EntryMinMax(depth, best_value)
         return best_value
 
     def make_move(self, game: 'Game') -> tuple[int | float, None | tuple[tuple[int, int], Move]]:
@@ -327,14 +362,22 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         # create seperate instance of a game for investigation
         game = InvestigateGame(game)
         # get all possible game transitions or canonical transitions
-        transitions = (
-            game.generate_canonical_transitions() if self._symmetries else game.generate_possible_transitions()
-        )
-        # parallelize min_value
-        values = Parallel(n_jobs=-1)(
-            delayed(self.min_value)(state, key, self._depth - 1, float('-inf'), float('inf'))
-            for _, state, key in transitions
-        )
+        transitions = game.generate_canonical_transitions()
+        # if we are not in training
+        if not self._train:
+            # parallelize min_value
+            values = Parallel(n_jobs=-1)(
+                delayed(self.min_value)(state, key, self._depth - 1, float('-inf'), float('inf'))
+                for _, state, key in transitions
+            )
+        # otherwise
+        else:
+            # parallelize with shared memory to update visited dict (slower)
+            values = Parallel(n_jobs=-1, require='sharedmem')(
+                delayed(self.min_value)(state, key, self._depth - 1, float('-inf'), float('inf'))
+                for _, state, key in transitions
+            )
+
         # return the action corresponding to the best estimated move
         _, (action, _, _) = max(
             enumerate(transitions),
@@ -344,32 +387,5 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         return action
 
 
-if __name__ == '__main__':
-    from tqdm import trange
-    from players.random_player import RandomPlayer
-
-    def test(player1, player2, num_games, idx):
-        wins = 0
-        pbar = trange(num_games)
-        for game in pbar:
-            g = Game()
-            w = g.play(player1, player2)
-            if w == idx:
-                wins += 1
-            pbar.set_description(f'Current percentage of wins player {idx}: {wins/(game+1):%}')
-        print(f'Percentage of wins player {idx}: {wins/num_games:%}')
-
-    print(f'AlphaBetaMinMax as first')
-    test(
-        MinMaxPlayer(depth=2, symmetries=False, enhance=False),
-        RandomPlayer(),
-        10,
-        0,
-    )
-    print(f'AlphaBetaMinMax as second')
-    test(
-        RandomPlayer(),
-        MinMaxPlayer(depth=2, symmetries=False, enhance=False),
-        10,
-        1,
-    )
+if __name__ == "__main__":
+    minmax_player = MinMaxPlayer(depth=2, enhance=True)

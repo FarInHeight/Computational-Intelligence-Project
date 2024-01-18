@@ -7,7 +7,7 @@ from random import random, choice
 from tqdm import trange
 from players.random_player import RandomPlayer
 from utils.investigate_game import InvestigateGame, MissNoAddDict
-from players.min_max import MinMaxPlayer
+from players.min_max import AlphaBetaMinMaxPlayer
 
 
 class MonteCarloRLPlayer(Player):
@@ -22,10 +22,6 @@ class MonteCarloRLPlayer(Player):
         alpha: float = 0.1,
         min_exploration_rate: float = 0.01,
         exploration_decay_rate: float = 1e-5,
-        minmax: bool = False,
-        switch_ratio: int = 0.9,
-        depth: int = 1,
-        symmetries: bool = False,
     ) -> None:
         """
         The Monte Carlo-learning player constructor.
@@ -36,10 +32,6 @@ class MonteCarloRLPlayer(Player):
             alpha: how much information to incorporate from the new experience;
             min_exploration_rate: the minimum rate for exploration during the training phase;
             exploration_decay_rate: the exploration decay rate used during the training;
-            minmax: decide if the training must be performed also on minmax.
-            switch_ratio: define the moment in which we should play against minmax;
-            depth: maximum depth of the Min-Max search tree;
-            symmetries: flag to consider the symmetries or not.
 
         Returns:
             None.
@@ -56,10 +48,6 @@ class MonteCarloRLPlayer(Player):
         self._exploration_decay_rate = (
             exploration_decay_rate  # define the exploration decay rate used during the training
         )
-        self._minmax = minmax  # define if we want to play also against minmax
-        self._switch_ratio = switch_ratio  # define the moment in which minmax plays against us
-        self._depth = depth  # define the depth for minmax
-        self._symmetries = symmetries  # choose if symmetries should be taken into account
         self._rewards = []  # list of the rewards obtained during training
 
     @property
@@ -168,13 +156,20 @@ class MonteCarloRLPlayer(Player):
         # return the action
         return action
 
-    def train(self, max_steps_draw: int) -> None:
+    def train(
+        self,
+        max_steps_draw: int,
+        opponent: Player = AlphaBetaMinMaxPlayer(depth=1),
+        switch_ratio: int = 1,
+    ) -> None:
         """
         Train the Monte Carlo-learning player.
 
         Args:
             max_steps_draw: define the maximum number of steps before
                             claiming a draw.
+            opponent: the other player against which we play after the switch moment;
+            switch_ratio: define the moment in which we should play against the other opponent.
 
         Returns:
             None.
@@ -188,7 +183,7 @@ class MonteCarloRLPlayer(Player):
         # if we want to play also against minmax
         if self._minmax:
             # define a new players tuple
-            minmax_players = self, MinMaxPlayer(depth=1, symmetries=self._symmetries, enhance=True)
+            new_players = self, opponent
 
         # for each episode
         for episode in pbar_episodes:
@@ -196,8 +191,8 @@ class MonteCarloRLPlayer(Player):
             game = InvestigateGame(Game())
 
             # switch the players if it is the moment
-            if self._minmax and math.isclose(self._switch_ratio, episode / self._n_episodes):
-                players = minmax_players
+            if math.isclose(switch_ratio, episode / self._n_episodes):
+                players = new_players
 
             # define the trajectory
             trajectory = []
