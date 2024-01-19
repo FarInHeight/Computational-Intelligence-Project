@@ -39,6 +39,7 @@ We performed several trials and after a consultation with [Riccardo Cardona](htt
 - [utils](utils): this directory contains files which are necessary for the agents to play and implement performance improvements
     - [investigate_game.py](utils/investigate_game.py): class which extends `Game` and it is used by our agents 
     - [symmetry.py](utils/symmetry.py): class which implements all the possible symmetries and it is used by our agents
+- [project_summary.ipynb](project_summary.ipynb): notebook used to train agents and to show results
 
 ## Resources
 
