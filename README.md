@@ -8,7 +8,7 @@ Keeping this in mind, we decided to implement the following methods:
 - [x] Human Player
 - [x] MinMax
 - [x] MinMax + Alpha-Beta pruning
-- [x] Monte Carlo Reinforcement Learning
+- [x] Monte Carlo Reinforcement Learning (TD learning + Symmetries)
 - [x] Monte Carlo Tree Search
 
 Although _Monte Carlo Tree Search_ is not a topic of the course, we included it because _Quixo_ has a great branching factor value and we wanted an agent that could overcome this problem.
