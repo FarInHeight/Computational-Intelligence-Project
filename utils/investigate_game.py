@@ -127,18 +127,21 @@ class InvestigateGame(Game):
         transitions = []
         # for each piece position
         for from_pos, slide in POSSIBLE_MOVES:
-            # make a copy of the current game state
-            state = deepcopy(self)
-            # create an action
-            action = (from_pos, slide)
-            # perfom the action (note: _Game__move is necessary due to name mangling)
-            ok = state._Game__move(from_pos, slide, self.current_player_idx)
+            # check the validity of the action
+            ok = (
+                self._board[from_pos[1], from_pos[0]] == -1
+                or self._board[from_pos[1], from_pos[0]] == self.current_player_idx
+            )
             # if it is a valid action
             if ok:
+                # make a copy of the current game state
+                state = deepcopy(self)
+                # perfom the action (note: _Game__move is necessary due to name mangling)
+                state._Game__move(from_pos, slide, self.current_player_idx)
                 # update the current player index
                 state.current_player_idx = 1 - state.current_player_idx
                 # append to the list of possible transitions
-                transitions.append((action, state, state.get_hashable_state(self.current_player_idx)))
+                transitions.append(((from_pos, slide), state, state.get_hashable_state(self.current_player_idx)))
 
         return transitions
 
@@ -161,14 +164,17 @@ class InvestigateGame(Game):
         canonical_states = set()
         # for each piece position
         for from_pos, slide in POSSIBLE_MOVES:
-            # make a copy of the current game state
-            state = deepcopy(self)
-            # create an action
-            action = (from_pos, slide)
-            # perfom the action (note: _Game__move is necessary due to name mangling)
-            ok = state._Game__move(from_pos, slide, self.current_player_idx)
+            # check the validity of the action
+            ok = (
+                self._board[from_pos[1], from_pos[0]] == -1
+                or self._board[from_pos[1], from_pos[0]] == self.current_player_idx
+            )         
             # if it is a valid action
             if ok:
+                # make a copy of the current game state
+                state = deepcopy(self)
+                # perfom the action (note: _Game__move is necessary due to name mangling)
+                state._Game__move(from_pos, slide, self.current_player_idx)
                 # get the equivalent canonical state
                 canonical_state = Symmetry.get_canonical_state(state, self.current_player_idx)
                 # if it is a new canonical state
@@ -176,7 +182,7 @@ class InvestigateGame(Game):
                     # update the current player index
                     state.current_player_idx = 1 - state.current_player_idx
                     # append to the list of possible transitions
-                    transitions.append((action, state, canonical_state))
+                    transitions.append(((from_pos, slide), state, canonical_state))
                     # appens to the list of canonical states
                     canonical_states.add(canonical_state)
 
@@ -333,3 +339,14 @@ class InvestigateGame(Game):
         print('-- END OF THE GAME --')
         # return the winner
         return winner
+
+
+if "__main__" == __name__:
+    import timeit
+
+    r = timeit.timeit(
+        setup="from investigate_game import InvestigateGame, Game; g = InvestigateGame(Game())",
+        stmt="g.generate_possible_transitions()",
+        number=1000,
+    )
+    print(r)

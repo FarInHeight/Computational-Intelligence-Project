@@ -5,6 +5,7 @@ from collections import namedtuple
 from joblib import Parallel, delayed
 from tqdm import trange
 from players.random_player import RandomPlayer
+from copy import deepcopy
 
 
 EntryMinMax = namedtuple('EntryMinMax', ['depth', 'value'])
@@ -32,7 +33,24 @@ class MinMaxPlayer(Player):
         self._depth = depth
         self._symmetries = symmetries
         self._enhance = enhance
-        self._train = False
+        self._parallelize = True
+
+    def parallelize(self, activate: bool = True) -> None:
+        """
+        Decide if to parallelize the MinMax procedure. If parallelization is activated,
+        then the hash table is deleted.
+
+        Args:
+            activate: whether to activate the parallelization or not.
+
+        Returns:
+            None.
+        """
+        # set parallelization flag
+        self._parallelize = activate
+        if activate:
+            # reset visited dict state
+            self._visited = {}
 
     def max_value(self, game: 'InvestigateGame', key: int, depth: int) -> int | float:
         """
@@ -130,18 +148,16 @@ class MinMaxPlayer(Player):
         game = InvestigateGame(game)
         # get first canonical level
         transitions = game.generate_canonical_transitions()
-        # if we are not training
-        if not self._train:
+        # if we are parallelizing
+        if self._parallelize:
             # parallelize min_value
             values = Parallel(n_jobs=-1)(
                 delayed(self.min_value)(state, key, self._depth - 1) for _, state, key in transitions
             )
         # otherwise
         else:
-            # parallelize with shared memory to update visited dict (slower)
-            values = Parallel(n_jobs=-1, require='sharedmem')(
-                delayed(self.min_value)(state, key, self._depth - 1) for _, state, key in transitions
-            )
+            # do not parallelize
+            values = [self.min_value(state, key, self._depth - 1) for _, state, key in transitions]
 
         # return the action corresponding to the best estimated move
         _, (action, _, _) = max(
@@ -161,8 +177,8 @@ class MinMaxPlayer(Player):
         Returns:
             None.
         """
-        # set training flag
-        self._train = True
+        # set parallelize flag to false
+        self._parallelize = False
         # get current number of found states
         initial_n_states = len(self._visited)
         # define the players
@@ -179,8 +195,6 @@ class MinMaxPlayer(Player):
             players = players[1], players[0]
             pbar.set_description(f"Found states: {len(self._visited):,}")
         print(f"New found states after {n_games} games: {(len(self._visited) - initial_n_states):,}")
-        # set training flag to false
-        self._train = False
 
     def save(self, path: str) -> None:
         """
@@ -363,8 +377,8 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
         game = InvestigateGame(game)
         # get all possible game transitions or canonical transitions
         transitions = game.generate_canonical_transitions()
-        # if we are not in training
-        if not self._train:
+        # if we are parallelizing
+        if self._parallelize:
             # parallelize min_value
             values = Parallel(n_jobs=-1)(
                 delayed(self.min_value)(state, key, self._depth - 1, float('-inf'), float('inf'))
@@ -372,11 +386,11 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
             )
         # otherwise
         else:
-            # parallelize with shared memory to update visited dict (slower)
-            values = Parallel(n_jobs=-1, require='sharedmem')(
-                delayed(self.min_value)(state, key, self._depth - 1, float('-inf'), float('inf'))
+            # do not parallelize
+            values = [
+                self.min_value(state, key, self._depth - 1, float('-inf'), float('inf'))
                 for _, state, key in transitions
-            )
+            ]
 
         # return the action corresponding to the best estimated move
         _, (action, _, _) = max(
@@ -388,4 +402,66 @@ class AlphaBetaMinMaxPlayer(MinMaxPlayer):
 
 
 if __name__ == "__main__":
-    minmax_player = MinMaxPlayer(depth=2, enhance=True)
+    import matplotlib.pyplot as plt
+    def show_minmax_statistics(player: MinMaxPlayer) -> None:
+        """
+        Play a few games between two players and plot the calculated winning percentages.
+
+        Args:
+            players1: the first player;
+            players2: the second player;
+            n_games: how many games to play.
+
+        Returns:
+            None.
+        """
+        import time
+
+        # define the width and height of the figure in inches
+        plt.figure(figsize=(8, 5))
+
+        games_duration = []
+        flags = []
+
+        # let the different flags
+        for flag1, flag2 in [(False,True),(True,True),(False,False),(True,False),]:
+            # set flags
+            player.parallelize(flag1)
+            player._symmetries = flag2
+            # create the game
+            game = Game()
+            # take a start time
+            start = time.time()
+            # play the game
+            game.play(player, RandomPlayer())
+            # append total time
+            games_duration.append(round(time.time() - start,2))
+            # append flags used
+            flags.append(f"{'Parallization' if flag1 and not flag2 else ('Parallization and Symmetries' if flag1 and flag2 else ('Symmetries' if flag2 and not flag1 else 'Nothing'))}")
+            
+        # plot the first player wins
+        bars = plt.bar(flags, games_duration, color=['royalblue'], width=0.2)
+        # for each bar
+        for i,bar in enumerate(bars):
+            # write the percentage on top of the bar
+            plt.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height(),
+                games_duration[i],
+                ha='center',
+                va='bottom',
+                fontsize='medium',
+            )
+        
+        # delete y-axis ticks and labels
+        plt.tick_params(left=False, labelleft=False)
+        # specify the y-axis label
+        plt.ylabel('Seconds')
+        # specify the title shared between the subplots
+        plt.title(
+            f'Different time of 1 game duration: {player.__class__.__name__} vs RandomPlayer.',
+            fontsize=10,
+        )
+        plt.show()
+    minmax_player = AlphaBetaMinMaxPlayer(depth=2, enhance=True)
+    show_minmax_statistics(minmax_player)
