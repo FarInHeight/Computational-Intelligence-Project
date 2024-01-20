@@ -221,6 +221,8 @@ class MinMaxPlayer(Player):
         # load the serialized MinMax player
         with open(path, 'rb') as f:
             self.__dict__ = pickle.load(f)
+        # disable parallelization
+        self._parallelize = False
 
 
 class AlphaBetaMinMaxPlayer(MinMaxPlayer):

@@ -2,7 +2,7 @@
 name = "Computational-Intelligence-Project"
 version = "0.1.0"
 description = "Project for the Computational Intelligence course 23/24 - Politecnico di Torino"
-authors = ["Davide Sferrazza", "Davide Vitabile]
+authors = ["Davide Sferrazza", "Davide Vitabile"]
 license = "MIT License"
 readme = "README.md"
 

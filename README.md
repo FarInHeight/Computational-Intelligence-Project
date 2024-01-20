@@ -13,6 +13,10 @@ Keeping this in mind, we decided to implement the following methods:
 
 Although _Monte Carlo Tree Search_ is not a topic of the course, we included it because _Quixo_ has a great branching factor value and we wanted an agent that could overcome this problem.
 
+### Space Optimization
+
+Since the _Quixo_ game has a huge amount of states, we focused our attention on optimizing the space required by our serialized agents. Before this new representation, the Monte Carlo RL player weighed more than a GB, while now its size is 57 KB.
+
 ### Players Improvements
 
 To improve the performance of the players we implemented the following improvements:
@@ -41,11 +45,34 @@ We performed several trials and after a consultation with [Riccardo Cardona](htt
     - [symmetry.py](utils/symmetry.py): class which implements all the possible symmetries and it is used by our agents
 - [project_summary.ipynb](project_summary.ipynb): notebook used to train agents and to show results
 
+The serialized `MinMax` and `MinMax + Alpha-Beta pruning` players with a non-empty hash table can be found in the release section.
+
+## How to run
+
+To run a specific `module.py` file, open the terminal and type the following command from the root of the project:
+```bash
+python -m folder.module
+```
+As an example, run the `min_max.py` file as follows:
+```bash
+python -m players.min_max
+```
+
+If you are using VS Code as editor, you can add 
+```json
+"terminal.integrated.env.[your os]": 
+{
+    "PYTHONPATH": "${workspaceFolder}"
+}
+```
+to your settings and run the module directly using the <kbd>▶</kbd> button.
+
 ## Resources
 
 * Sutton & Barto, _Reinforcement Learning: An Introduction_ [2nd Edition]
 * Russel, Norvig, _Artificial Intelligence: A Modern Approach_ [4th edition]
 * Nils J. Nilsson, _Artificial Intelligence: A New Synthesis_ Morgan Kaufmann Publishers, Inc. (1998)
+* [Quixo Is Solved](https://arxiv.org/pdf/2007.15895.pdf)
 * [aimacode/aima-python](https://github.com/aimacode/aima-python/tree/master) + [Monte Carlo Tree Search implementation example](https://github.com/aimacode/aima-python/blob/master/games4e.py#L178)
 
 ## License
