@@ -45,7 +45,7 @@ We performed several trials and after a consultation with [Riccardo Cardona](htt
     - [symmetry.py](utils/symmetry.py): class which implements all the possible symmetries and it is used by our agents
 - [project_summary.ipynb](project_summary.ipynb): notebook used to train agents and to show results
 
-The serialized `MinMax` and `MinMax + Alpha-Beta pruning` players with a non-empty hash table can be found in the release section.
+The serialized `MinMax` and `MinMax + Alpha-Beta pruning` players with a non-empty hash table can be found in the [release section](https://github.com/FarInHeight/Computational-Intelligence-Project/releases/tag/v1.0.0).
 
 ## How to run
 
