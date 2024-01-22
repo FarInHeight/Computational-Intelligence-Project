@@ -103,5 +103,10 @@ to your settings and run the module directly using the <kbd>▶</kbd> button.
 * [Quixo Is Solved](https://arxiv.org/pdf/2007.15895.pdf)
 * [aimacode/aima-python](https://github.com/aimacode/aima-python/tree/master) + [Monte Carlo Tree Search implementation example](https://github.com/aimacode/aima-python/blob/master/games4e.py#L178)
 
+## Authors
+
+- [Davide Sferrazza](https://github.com/FarInHeight/)
+- [Davide Vitabile](https://github.com/Vitabile)
+
 ## License
 [MIT License](LICENSE)
