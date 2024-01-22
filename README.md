@@ -1,4 +1,32 @@
-# Computational Intelligence Project
+# Computational Intelligence Project - Quixo
+
+## Game description
+
+**Quixo** is a game based on simple rules, but it is by no means simple.
+
+### [Rules](https://cs.uwaterloo.ca/~dtompkin/dtlib/base/Quixo.pdf)
+
+<blockquote>
+
+In turn, each player chooses a cube and moves it according to the following rules. In no event can a player
+miss his/her turn. \
+### Choosing and taking a cube
+The player chooses and takes a blank cube, or one with his/her symbol on it,
+from the board’s periphery. In the first round, the players have no choice but to take a blank cube. You
+are not allowed to take a cube bearing your opponent’s symbol.
+### Changing the cube symbol
+Whether the cube taken is blank or already bears the player’s symbol, it must
+always be replaced by a cube with the player’s symbol on the top face.
+### Replacing the cube
+The player can choose at which end of the incomplete rows made when a cube is taken,
+the cube is to be replaced; he/she pushes this end to replace the cube. You can never replace the cube just
+played back in the position from which it was taken.
+### END OF GAME
+The winner is the player to make and announce that he/she has made a horizontal, vertical
+or diagonal line with 5 cubes bearing his/her symbol. The player to make a line with his/her opponent’s
+symbol loses the game, even if he/she makes a line with his/her own symbol at the same time.
+
+</blockquote>
 
 ## Players - Design Choices
 
