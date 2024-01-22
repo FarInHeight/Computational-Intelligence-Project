@@ -105,8 +105,8 @@ to your settings and run the module directly using the <kbd>▶</kbd> button.
 
 ## Authors
 
-- [Davide Sferrazza](https://github.com/FarInHeight/)
-- [Davide Vitabile](https://github.com/Vitabile)
+- [Davide Sferrazza s326619](https://github.com/FarInHeight/Computational-Intelligence)
+- [Davide Vitabile s330509](https://github.com/Vitabile/Computational-Intelligence)
 
 ## License
 [MIT License](LICENSE)
