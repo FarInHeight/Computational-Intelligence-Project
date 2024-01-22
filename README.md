@@ -9,7 +9,7 @@
 <blockquote>
 
 In turn, each player chooses a cube and moves it according to the following rules. In no event can a player
-miss his/her turn. \
+miss his/her turn. 
 ### Choosing and taking a cube
 The player chooses and takes a blank cube, or one with his/her symbol on it,
 from the board’s periphery. In the first round, the players have no choice but to take a blank cube. You
