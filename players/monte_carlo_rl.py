@@ -123,7 +123,7 @@ class MonteCarloRLPlayer(Player):
         """
 
         # get all possible canonical transitions
-        transitions = game.generate_canonical_transitions(player_id)
+        transitions = game.generate_canonical_transitions()
 
         # randomly perform exploration
         if random() < self._exploration_rate:
@@ -244,8 +244,6 @@ class MonteCarloRLPlayer(Player):
                         move = player.make_move(game)
                         # perform the move
                         ok = game._Game__move(*move, player_idx)
-                    # update the trajectory
-                    # trajectory.append(Symmetry.get_canonical_state(game, 1 - player_idx))
 
                 # check if there is a winner
                 winner = game.check_winner()
